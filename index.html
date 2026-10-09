@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Plan a three-food Valheim meal, see combined health, stamina and eitr, and browse foods and meads by biome.">
+<title>Valheim Mead & Feast Planner</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: longhouse board. Sticky "table" of 3 plates on top, larder shelves (card grid) below. Single dark look by design. */
+:root{
+  color-scheme:dark;
+  --bg:#1c1917; --plank:#2a221c; --plank-hi:#33291f; --edge:#4a3a2a;
+  --ink:#ede4d3; --muted:#a8998a; --gold:#f59e0b;
+  --font-display:"Grenze Gotisch","Palatino Linotype",Georgia,serif;
+  --font-body:"Alegreya Sans","Segoe UI",system-ui,sans-serif;
+}
+html{background:var(--bg)}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;
+  background-image:radial-gradient(ellipse at 50% -10%,rgba(245,158,11,.10),transparent 55%)}
+.display{font-family:var(--font-display);letter-spacing:.01em;text-wrap:balance}
+.wood{background-color:var(--plank);border:1px solid var(--edge);
+  background-image:repeating-linear-gradient(91deg,rgba(255,255,255,.022) 0 1px,transparent 1px 6px),
+    repeating-linear-gradient(89deg,rgba(0,0,0,.10) 0 2px,transparent 2px 23px),
+    linear-gradient(180deg,var(--plank-hi),var(--plank))}
+.num{font-variant-numeric:tabular-nums}
+.rune{color:var(--gold);opacity:.55;letter-spacing:.35em;font-size:.8rem}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+select{background-color:#292524}
+#boot{padding:48px 16px;text-align:center;color:var(--muted)}
+</style>
+<style>body{margin:0}</style>
+</head>
+<body>
+
+<div id="root"><div id="boot">Lighting the hearth…</div></div>
+
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/framer-motion@11.11.17/dist/framer-motion.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide-react@0.453.0/dist/umd/lucide-react.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.25.6/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useMemo } = React;
+const { motion, AnimatePresence, MotionConfig } = window.Motion;
+const L = window.LucideReact || {};
+const icon = (n) => L[n] || (() => null);
+const Heart = icon("Heart"), Zap = icon("Zap"), Sparkles = icon("Sparkles"), Search = icon("Search"),
+  X = icon("X"), Plus = icon("Plus"), Check = icon("Check"), Clock = icon("Clock"), Flask = icon("FlaskConical"),
+  Utensils = icon("Utensils"), Basket = icon("ShoppingBasket"), Chevron = icon("ChevronDown"),
+  Shield = icon("Shield"), Compass = icon("Compass"), Wand = icon("Wand2"), Scale = icon("Scale"),
+  Arrow = icon("ArrowRight"), Beer = icon("Beer"), Trash = icon("Trash2"), Hourglass = icon("Hourglass"),
+  Activity = icon("Activity"), Flame = icon("Flame");
+
+/* ───────── Data ───────── */
+const BIOMES = ["Meadows", "Black Forest", "Swamps", "Mountain", "Plains", "Mistlands", "Ashlands", "Deep North"];
+const BIOME_TINT = { "Deep North": "text-cyan-200", Meadows: "text-lime-300", "Black Forest": "text-emerald-300", Swamps: "text-teal-300",
+  Mountain: "text-sky-200", Plains: "text-amber-200", Mistlands: "text-violet-300", Ashlands: "text-orange-400" };
+const BASE = { hp: 25, st: 50, eitr: 0 };
+
+// [name, biome, hp, stamina, eitr, minutes, regen/tick, station, ingredients, yield]
+const F = (name, biome, hp, st, eitr, min, regen, station, ing = [], yieldN = 1) => {
+  const type = eitr > hp && eitr > st ? "Eitr" : hp === st ? "Balanced" : hp > st ? "Health" : "Stamina";
+  return { id: name, name, biome, hp, st, eitr, duration: min * 60, regen, station, ing, yieldN, type };
+};
+const FOODS = [
+  F("Raspberries", "Meadows", 7, 20, 0, 10, 1, "Foraged"),
+  F("Mushroom", "Meadows", 15, 15, 0, 15, 1, "Foraged"),
+  F("Honey", "Meadows", 8, 35, 0, 15, 1, "Beehive"),
+  F("Grilled neck tail", "Meadows", 25, 8, 0, 20, 2, "Cooking Station", [["Neck tail", 1]]),
+  F("Cooked boar meat", "Meadows", 30, 10, 0, 20, 2, "Cooking Station", [["Boar meat", 1]]),
+  F("Cooked deer meat", "Meadows", 35, 12, 0, 20, 2, "Cooking Station", [["Deer meat", 1]]),
+  F("Cooked fish", "Meadows", 45, 15, 0, 20, 2, "Cooking Station", [["Raw fish", 1]]),
+  F("Boar jerky", "Meadows", 23, 23, 0, 30, 2, "Cauldron", [["Boar meat", 1], ["Honey", 1]], 2),
+  F("Blueberries", "Black Forest", 8, 25, 0, 10, 1, "Foraged"),
+  F("Yellow mushroom", "Black Forest", 10, 30, 0, 10, 1, "Foraged"),
+  F("Carrot", "Black Forest", 10, 32, 0, 15, 1, "Farmed"),
+  F("Queen's jam", "Black Forest", 14, 40, 0, 20, 2, "Cauldron", [["Raspberries", 8], ["Blueberries", 6]], 4),
+  F("Carrot soup", "Black Forest", 15, 45, 0, 25, 2, "Cauldron", [["Mushroom", 1], ["Carrot", 3]]),
+  F("Minced meat sauce", "Black Forest", 40, 13, 0, 25, 3, "Cauldron", [["Boar meat", 1], ["Neck tail", 1], ["Carrot", 1]]),
+  F("Deer stew", "Black Forest", 45, 15, 0, 25, 3, "Cauldron", [["Blueberries", 1], ["Carrot", 1], ["Cooked deer meat", 1]]),
+  F("Muckshake", "Swamps", 16, 50, 0, 20, 1, "Cauldron", [["Ooze", 1], ["Raspberries", 2], ["Blueberries", 2]]),
+  F("Turnip stew", "Swamps", 18, 55, 0, 25, 2, "Cauldron", [["Boar meat", 1], ["Turnip", 3]]),
+  F("Black soup", "Swamps", 50, 17, 0, 20, 3, "Cauldron", [["Bloodbag", 1], ["Honey", 1], ["Turnip", 1]]),
+  F("Sausages", "Swamps", 55, 18, 0, 25, 3, "Cauldron", [["Entrails", 4], ["Boar meat", 1], ["Thistle", 1]], 4),
+  F("Cooked serpent meat", "Swamps", 70, 23, 0, 25, 3, "Iron Cooking Station", [["Serpent meat", 1]]),
+  F("Serpent stew", "Swamps", 80, 26, 0, 30, 4, "Cauldron", [["Mushroom", 1], ["Cooked serpent meat", 1], ["Honey", 2]]),
+  F("Onion", "Mountain", 13, 40, 0, 15, 1, "Farmed"),
+  F("Onion soup", "Mountain", 20, 60, 0, 20, 1, "Cauldron", [["Onion", 3]]),
+  F("Eyescream", "Mountain", 21, 65, 0, 25, 1, "Cauldron", [["Greydwarf eye", 3], ["Freeze gland", 1]]),
+  F("Cooked wolf meat", "Mountain", 45, 15, 0, 20, 3, "Cooking Station", [["Wolf meat", 1]]),
+  F("Wolf jerky", "Mountain", 33, 33, 0, 30, 3, "Cauldron", [["Wolf meat", 1], ["Honey", 1]], 2),
+  F("Wolf skewer", "Mountain", 65, 21, 0, 25, 3, "Cauldron", [["Wolf meat", 1], ["Mushroom", 2], ["Onion", 1]]),
+  F("Cloudberries", "Plains", 13, 40, 0, 15, 1, "Foraged"),
+  F("Cooked lox meat", "Plains", 50, 16, 0, 20, 4, "Iron Cooking Station", [["Lox meat", 1]]),
+  F("Bread", "Plains", 23, 70, 0, 25, 2, "Cauldron + Oven", [["Barley flour", 10]], 2),
+  F("Blood pudding", "Plains", 25, 75, 0, 30, 2, "Cauldron", [["Thistle", 2], ["Bloodbag", 2], ["Barley flour", 4]]),
+  F("Fish wraps", "Plains", 70, 23, 0, 25, 4, "Cauldron", [["Cooked fish", 2], ["Barley flour", 4]]),
+  F("Lox meat pie", "Plains", 75, 24, 0, 30, 4, "Cauldron + Oven", [["Barley flour", 4], ["Cloudberries", 2], ["Lox meat", 2]]),
+  F("Jotun puffs", "Mistlands", 25, 25, 0, 15, 1, "Foraged"),
+  F("Magecap", "Mistlands", 25, 25, 25, 15, 1, "Foraged"),
+  F("Cooked egg", "Mistlands", 35, 12, 0, 20, 2, "Cauldron", [["Egg", 1]]),
+  F("Cooked chicken meat", "Mistlands", 60, 20, 0, 20, 5, "Iron Cooking Station", [["Chicken meat", 1]]),
+  F("Cooked hare meat", "Mistlands", 60, 20, 0, 20, 5, "Iron Cooking Station", [["Hare meat", 1]]),
+  F("Cooked seeker meat", "Mistlands", 60, 20, 0, 20, 5, "Iron Cooking Station", [["Seeker meat", 1]]),
+  F("Salad", "Mistlands", 26, 80, 0, 25, 3, "Cauldron", [["Jotun puffs", 3], ["Onion", 3], ["Cloudberries", 3]], 3),
+  F("Mushroom omelette", "Mistlands", 28, 85, 0, 25, 3, "Cauldron", [["Egg", 3], ["Jotun puffs", 3]]),
+  F("Fish 'n' bread", "Mistlands", 30, 90, 0, 30, 3, "Cauldron + Oven", [["Anglerfish", 1], ["Bread dough", 2]]),
+  F("Honey glazed chicken", "Mistlands", 80, 26, 0, 30, 5, "Cauldron + Oven", [["Chicken meat", 1], ["Honey", 3], ["Jotun puffs", 2]]),
+  F("Meat platter", "Mistlands", 80, 26, 0, 30, 5, "Cauldron + Oven", [["Seeker meat", 1], ["Lox meat", 1], ["Hare meat", 1]]),
+  F("Misthare supreme", "Mistlands", 85, 28, 0, 25, 5, "Cauldron + Oven", [["Hare meat", 1], ["Jotun puffs", 3], ["Carrot", 2]]),
+  F("Stuffed mushroom", "Mistlands", 25, 12, 75, 25, 3, "Cauldron + Oven", [["Magecap", 3], ["Blood clot", 1], ["Turnip", 2]]),
+  F("Yggdrasil porridge", "Mistlands", 27, 13, 80, 25, 3, "Cauldron", [["Sap", 4], ["Barley", 3], ["Royal jelly", 2]]),
+  F("Seeker aspic", "Mistlands", 28, 14, 85, 30, 3, "Cauldron", [["Seeker meat", 2], ["Magecap", 2], ["Royal jelly", 2]], 2),
+  F("Vineberry cluster", "Ashlands", 30, 30, 30, 15, 1, "Foraged"),
+  F("Cooked asksvin tail", "Ashlands", 70, 24, 0, 20, 6, "Cooking Station", [["Asksvin tail", 1]]),
+  F("Cooked volture meat", "Ashlands", 70, 24, 0, 20, 6, "Cooking Station", [["Volture meat", 1]]),
+  F("Cooked bonemaw meat", "Ashlands", 90, 30, 0, 25, 6, "Iron Cooking Station", [["Bonemaw meat", 1]]),
+  F("Fiery svinstew", "Ashlands", 95, 32, 0, 25, 6, "Cauldron", [["Asksvin tail", 1], ["Vineberry cluster", 2], ["Smoke puff", 1]]),
+  F("Mashed meat", "Ashlands", 100, 34, 0, 25, 6, "Cauldron", [["Asksvin tail", 1], ["Volture meat", 1], ["Fiddlehead fern", 3]]),
+  F("Piquant pie", "Ashlands", 105, 35, 0, 30, 6, "Cauldron + Oven", [["Asksvin tail", 1], ["Vineberry cluster", 2], ["Barley flour", 4]]),
+  F("Spicy marmalade", "Ashlands", 30, 90, 0, 25, 4, "Cauldron", [["Vineberry cluster", 3], ["Honey", 1], ["Fiddlehead fern", 2]]),
+  F("Scorching medley", "Ashlands", 32, 95, 0, 25, 4, "Cauldron", [["Onion", 3], ["Fiddlehead fern", 3], ["Jotun puffs", 3]]),
+  F("Roasted crust pie", "Ashlands", 34, 100, 0, 30, 4, "Cauldron + Oven", [["Volture egg", 1], ["Vineberry cluster", 2], ["Barley flour", 4]]),
+  F("Sizzling berry broth", "Ashlands", 28, 14, 85, 25, 4, "Cauldron", [["Vineberry cluster", 2], ["Sap", 3], ["Fiddlehead fern", 2]]),
+  F("Sparkling shroomshake", "Ashlands", 30, 15, 90, 25, 4, "Cauldron", [["Magecap", 4], ["Vineberry cluster", 2], ["Smoke puff", 2], ["Sap", 2]]),
+  F("Marinated greens", "Ashlands", 32, 16, 95, 30, 4, "Cauldron", [["Sap", 3], ["Magecap", 2], ["Fiddlehead fern", 2], ["Smoke puff", 2]]),
+  F("Luminous larva", "Deep North", 30, 30, 0, 10, 1, "Foraged"),
+  F("Oats", "Deep North", 33, 33, 0, 30, 3, "Farmed"),
+  F("Kale", "Deep North", 35, 35, 0, 15, 1, "Farmed"),
+  F("Lingonberries", "Deep North", 35, 35, 0, 15, 1, "Foraged"),
+  F("Poteitr", "Deep North", 35, 35, 35, 15, 1, "Farmed"),
+  F("Cooked seal blubber", "Deep North", 60, 20, 0, 20, 5, "Cooking Station", [["Seal blubber", 1]]),
+  F("Cooked moose meat", "Deep North", 80, 27, 0, 20, 7, "Cooking Station", [["Moose meat", 1]]),
+  F("Smoked moose meat", "Deep North", 105, 35, 0, 25, 7, "Smoker", [["Moose meat", 1], ["Kale", 2]]),
+  F("Seal meat soup", "Deep North", 110, 37, 0, 30, 7, "Cauldron", [["Seal blubber", 2], ["Kale", 2], ["Ice", 2]]),
+  F("Meat in bread", "Deep North", 110, 37, 0, 30, 7, "Cauldron + Oven", [["Moose meat", 1], ["Kale", 2], ["Oat flour", 1], ["Lingonberries", 2]]),
+  F("Kale chips", "Deep North", 35, 105, 0, 25, 5, "Cauldron + Oven", [["Raw kale chips", 1]]),
+  F("Lingonberry juice", "Deep North", 35, 105, 0, 25, 5, "Cauldron", [["Lingonberries", 5], ["Ice", 5]]),
+  F("Oat milk", "Deep North", 37, 110, 0, 25, 5, "Cauldron", [["Oats", 5], ["Ice", 5]]),
+  F("Oatmeal", "Deep North", 39, 115, 0, 30, 5, "Cauldron", [["Oats", 2], ["Lingonberries", 2], ["Oat milk", 1]]),
+  F("Pancakes", "Deep North", 39, 115, 0, 30, 5, "Cooking Station", [["Oat milk", 1], ["Oat flour", 2], ["Egg", 2], ["Blueberries", 2]]),
+  F("Smoked fish", "Deep North", 30, 16, 95, 25, 5, "Smoker", [["Raw fish", 1], ["Kale", 1], ["Poteitr", 1]]),
+  F("Baked poteitr", "Deep North", 34, 17, 100, 25, 5, "Oven", [["Poteitr", 1]]),
+  F("Meatballs and poteitr", "Deep North", 35, 18, 105, 25, 5, "Cauldron", [["Moose meat", 1], ["Lingonberries", 2], ["Poteitr", 2]]),
+  F("Fish soup", "Deep North", 37, 18, 105, 30, 5, "Cauldron", [["Raw fish", 3], ["Kale", 2], ["Ice", 2]]),
+];
+
+const M = (name, category, biome, effect, duration, cooldown, ing) =>
+  ({ id: name, name, category, biome, effect, duration, cooldown, ing, station: "Mead Ketill → Fermenter", yieldN: 6 });
+const MEADS = [
+  M("Tasty mead", "Utility", "Black Forest", "+100% stamina regen, −50% health regen for 10s", 10, 10, [["Honey", 10], ["Raspberries", 10], ["Blueberries", 5]]),
+  M("Minor healing mead", "Healing", "Black Forest", "Restores 50 health over 10s", 10, 120, [["Honey", 10], ["Blueberries", 5], ["Raspberries", 10], ["Dandelion", 1]]),
+  M("Minor stamina mead", "Stamina", "Black Forest", "Restores 80 stamina almost instantly", 2, 120, [["Honey", 10], ["Raspberries", 10], ["Yellow mushroom", 10]]),
+  M("Poison resistance mead", "Resistance", "Black Forest", "Poison Resistance for 10m", 600, 600, [["Honey", 10], ["Thistle", 5], ["Neck tail", 1], ["Coal", 10]]),
+  M("Medium healing mead", "Healing", "Swamps", "Restores 75 health over 10s", 10, 120, [["Honey", 10], ["Bloodbag", 4], ["Raspberries", 10], ["Dandelion", 1]]),
+  M("Frost resistance mead", "Resistance", "Swamps", "Frost Resistance for 10m", 600, 600, [["Honey", 10], ["Thistle", 5], ["Bloodbag", 2], ["Greydwarf eye", 1]]),
+  M("Medium stamina mead", "Stamina", "Plains", "Restores 160 stamina almost instantly", 2, 120, [["Honey", 10], ["Cloudberries", 10], ["Yellow mushroom", 10]]),
+  M("Fire resistance barley wine", "Resistance", "Plains", "Fire Resistance for 10m", 600, 600, [["Barley", 10], ["Cloudberries", 10]]),
+  M("Major healing mead", "Healing", "Mistlands", "Very high: restores 125 health over 10s", 10, 120, [["Honey", 10], ["Blood clot", 4], ["Royal jelly", 5]]),
+  M("Lingering stamina mead", "Stamina", "Mistlands", "+25% stamina regen for 5m", 300, 300, [["Sap", 10], ["Cloudberries", 10], ["Jotun puffs", 10]]),
+  M("Minor eitr mead", "Utility", "Mistlands", "Restores 125 eitr over 10s", 10, 120, [["Honey", 10], ["Sap", 5], ["Jotun puffs", 2], ["Magecap", 5]]),
+  M("Lingering healing mead", "Healing", "Ashlands", "+25% health regen for 5m", 300, 300, [["Sap", 10], ["Vineberry cluster", 10], ["Smoke puff", 10]]),
+  M("Lingering eitr mead", "Utility", "Ashlands", "+25% eitr regen for 5m", 300, 300, [["Sap", 10], ["Vineberry cluster", 10], ["Magecap", 10]]),
+];
+
+const PRESETS = [
+  { id: "tank", label: "Tank / Boss Fighter", hint: "3× high health", Icon: Shield, pick: ["hp", "hp", "hp"] },
+  { id: "explorer", label: "Explorer / Builder", hint: "3× high stamina", Icon: Compass, pick: ["st", "st", "st"] },
+  { id: "mage", label: "Mage / Eitr Weaver", hint: "2× eitr + 1× health", Icon: Wand, pick: ["eitr", "eitr", "hp"] },
+  { id: "balanced", label: "Balanced Adventurer", hint: "health + stamina + eitr", Icon: Scale, pick: ["hp", "st", "eitr"] },
+];
+
+/* ───────── Helpers ───────── */
+const fmtDur = (s) => (s >= 60 ? `${Math.round(s / 60)}m` : `${s}s`);
+const fuzzyOne = (q, t) => {
+  t = t.toLowerCase();
+  if (t.includes(q)) return true;
+  let i = 0;
+  for (const c of t) { if (c === q[i]) i++; if (i === q.length) return true; }
+  return false;
+};
+const fuzzy = (q, item) => {
+  q = q.trim().toLowerCase().replace(/\s+/g, "");
+  if (!q) return true;
+  return fuzzyOne(q, item.name.replace(/\s+/g, "")) || item.ing.some(([n]) => fuzzyOne(q, n.replace(/\s+/g, "")));
+};
+// Best foods available up to a biome tier. Falls back to stamina when no eitr food exists yet.
+const buildPreset = (pick, tier) => {
+  const pool = FOODS.filter((f) => BIOMES.indexOf(f.biome) <= tier);
+  const chosen = [];
+  pick.forEach((stat) => {
+    let cands = pool.filter((f) => !chosen.includes(f.id));
+    if (stat === "eitr" && !cands.some((f) => f.eitr > 0)) stat = "st";
+    cands.sort((a, b) => b[stat] - a[stat] || b.regen - a.regen);
+    if (cands[0]) chosen.push(cands[0].id);
+  });
+  return chosen;
+};
+
+/* ───────── Small pieces ───────── */
+const STAT = {
+  hp: { label: "Health", Icon: Heart, text: "text-red-400", bg: "bg-red-500", chip: "bg-red-950/70 text-red-300 border-red-800/70", max: 400 },
+  st: { label: "Stamina", Icon: Zap, text: "text-yellow-300", bg: "bg-yellow-400", chip: "bg-yellow-950/60 text-yellow-200 border-yellow-700/60", max: 400 },
+  eitr: { label: "Eitr", Icon: Sparkles, text: "text-purple-300", bg: "bg-purple-500", chip: "bg-purple-950/70 text-purple-200 border-purple-700/70", max: 350 },
+};
+const Badge = ({ stat, value }) => {
+  const s = STAT[stat];
+  return (
+    <span className={`num inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-sm font-bold ${s.chip} ${value ? "" : "opacity-35"}`} title={s.label}>
+      <s.Icon size={13} strokeWidth={2.5} aria-hidden="true" />{value}<span className="sr-only"> {s.label}</span>
+    </span>
+  );
+};
+const Pill = ({ active, onClick, children }) => (
+  <button onClick={onClick} aria-pressed={active}
+    className={`rounded-sm border px-2.5 py-1 text-sm font-medium transition-colors ${active ? "border-amber-500 bg-amber-500 text-stone-950" : "border-stone-700 bg-stone-800/70 text-stone-300 hover:border-amber-600 hover:text-amber-200"}`}>
+    {children}
+  </button>
+);
+const Ingredients = ({ ing }) => ing.length ? (
+  <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-stone-300">
+    {ing.map(([n, q]) => <li key={n}><span className="num font-bold text-amber-400">{q}×</span> {n}</li>)}
+  </ul>
+) : <p className="text-sm italic text-stone-500">No recipe. Gather it in the wild.</p>;
+
+const StatBar = ({ stat, total, parts }) => {
+  const s = STAT[stat];
+  const pct = (v) => `${Math.min(100, (v / s.max) * 100)}%`;
+  const segs = [{ k: "base", v: BASE[stat], cls: "bg-stone-500" }, ...parts.map((v, i) => ({ k: i, v, cls: s.bg, o: 1 - i * 0.22 }))];
+  return (
+    <div className="min-w-0">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className={`flex items-center gap-1 text-xs font-bold uppercase tracking-wider ${s.text}`}><s.Icon size={12} aria-hidden="true" />{s.label}</span>
+        <motion.span key={total} initial={{ scale: 1.25 }} animate={{ scale: 1 }} className={`num display text-2xl leading-none ${s.text}`}>{total}</motion.span>
+      </div>
+      <div className="mt-1 flex h-2.5 overflow-hidden rounded-sm border border-stone-700 bg-stone-950" role="img" aria-label={`${s.label} ${total}`}>
+        {segs.map((g) => (
+          <motion.div key={g.k} className={`${g.cls} h-full border-r border-stone-950/60`} style={{ opacity: g.o ?? 1 }}
+            initial={false} animate={{ width: pct(g.v) }} transition={{ type: "spring", stiffness: 170, damping: 24 }} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ───────── Cards ───────── */
+const FoodCard = ({ f, selected, full, onToggle }) => (
+  <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
+    whileHover={{ y: -3 }} transition={{ duration: 0.18 }}
+    className={`wood flex flex-col gap-2.5 rounded-sm p-3.5 shadow-lg shadow-black/30 ${selected ? "ring-2 ring-amber-500" : "hover:border-amber-700"}`}>
+    <header className="flex items-start justify-between gap-2">
+      <div className="min-w-0">
+        <h3 className="display text-xl leading-tight text-stone-100">{f.name}</h3>
+        <p className="text-xs uppercase tracking-wider"><span className={BIOME_TINT[f.biome]}>{f.biome}</span><span className="text-stone-500"> · {f.type}</span></p>
+      </div>
+      <button onClick={() => onToggle(f.id)} disabled={!selected && full}
+        className={`flex shrink-0 items-center gap-1 rounded-sm border px-2 py-1 text-sm font-bold transition-colors ${selected ? "border-amber-500 bg-amber-500 text-stone-950 hover:bg-amber-400" : "border-amber-700 text-amber-300 hover:bg-amber-500 hover:text-stone-950 disabled:cursor-not-allowed disabled:border-stone-700 disabled:text-stone-600 disabled:hover:bg-transparent"}`}>
+        {selected ? <><Check size={14} aria-hidden="true" />On plate</> : full ? "Plates full" : <><Plus size={14} aria-hidden="true" />Eat</>}
+      </button>
+    </header>
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Badge stat="hp" value={f.hp} /><Badge stat="st" value={f.st} /><Badge stat="eitr" value={f.eitr} />
+    </div>
+    <dl className="num flex flex-wrap gap-x-4 gap-y-1 text-sm text-stone-400">
+      <div className="flex items-center gap-1"><Clock size={13} aria-hidden="true" /><dt className="sr-only">Duration</dt><dd>{fmtDur(f.duration)}</dd></div>
+      <div className="flex items-center gap-1"><Activity size={13} aria-hidden="true" /><dt className="sr-only">Health regen</dt><dd>{f.regen} hp/tick</dd></div>
+      <div className="flex items-center gap-1"><Flame size={13} aria-hidden="true" /><dt className="sr-only">Station</dt><dd>{f.station}</dd></div>
+    </dl>
+    <div className="mt-auto border-t border-stone-700/70 pt-2">
+      <Ingredients ing={f.ing} />
+      {f.yieldN > 1 && <p className="mt-1 text-xs text-stone-500">One craft makes {f.yieldN}.</p>}
+    </div>
+  </motion.article>
+);
+
+const CAT = { Healing: "bg-red-950/70 text-red-300 border-red-800/70", Stamina: "bg-yellow-950/60 text-yellow-200 border-yellow-700/60",
+  Resistance: "bg-sky-950/70 text-sky-200 border-sky-800/70", Utility: "bg-purple-950/70 text-purple-200 border-purple-700/70" };
+const Step = ({ Icon, title, children }) => (
+  <div className="min-w-0 flex-1 rounded-sm border border-stone-700/80 bg-stone-950/40 p-2.5">
+    <p className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-400"><Icon size={13} aria-hidden="true" />{title}</p>
+    {children}
+  </div>
+);
+const MeadCard = ({ m }) => (
+  <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
+    whileHover={{ y: -3 }} transition={{ duration: 0.18 }} className="wood flex flex-col gap-3 rounded-sm p-3.5 shadow-lg shadow-black/30 hover:border-amber-700">
+    <header className="flex items-start justify-between gap-2">
+      <div className="min-w-0">
+        <h3 className="display text-xl leading-tight text-stone-100">{m.name}</h3>
+        <p className={`text-xs uppercase tracking-wider ${BIOME_TINT[m.biome]}`}>{m.biome}</p>
+      </div>
+      <span className={`shrink-0 rounded-sm border px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider ${CAT[m.category]}`}>{m.category}</span>
+    </header>
+    <p className="text-base font-medium text-amber-100">{m.effect}</p>
+    <p className="num flex flex-wrap gap-x-4 text-sm text-stone-400">
+      <span className="flex items-center gap-1"><Clock size={13} aria-hidden="true" />Lasts {fmtDur(m.duration)}</span>
+      <span className="flex items-center gap-1"><Hourglass size={13} aria-hidden="true" />Cooldown {fmtDur(m.cooldown)}</span>
+    </p>
+    <div className="mt-auto flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-stretch">
+      <Step Icon={Flame} title="Mead base"><Ingredients ing={m.ing} /></Step>
+      <Arrow size={16} className="hidden shrink-0 self-center text-amber-600 sm:block" aria-hidden="true" />
+      <Step Icon={Hourglass} title="Ferment"><p className="text-sm text-stone-300">2 in-game days in a Fermenter, about 1 hour of play.</p></Step>
+      <Arrow size={16} className="hidden shrink-0 self-center text-amber-600 sm:block" aria-hidden="true" />
+      <Step Icon={Beer} title="Yield"><p className="display num text-2xl leading-none text-amber-300">{m.yieldN}×</p><p className="text-sm text-stone-300">meads per base</p></Step>
+    </div>
+  </motion.article>
+);
+
+/* ───────── App ───────── */
+function App() {
+  const [slots, setSlots] = useState(() => buildPreset(["hp", "st", "eitr"], 7));
+  const [tier, setTier] = useState(7);
+  const [tab, setTab] = useState("foods");
+  const [biome, setBiome] = useState("All");
+  const [focus, setFocus] = useState("All");
+  const [cat, setCat] = useState("All");
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState("progression");
+  const [showList, setShowList] = useState(false);
+
+  const picked = slots.map((id) => FOODS.find((f) => f.id === id)).filter(Boolean);
+  const totals = {
+    hp: BASE.hp + picked.reduce((a, f) => a + f.hp, 0),
+    st: BASE.st + picked.reduce((a, f) => a + f.st, 0),
+    eitr: BASE.eitr + picked.reduce((a, f) => a + f.eitr, 0),
+    regen: picked.reduce((a, f) => a + f.regen, 0),
+  };
+  const shopping = useMemo(() => {
+    const map = new Map();
+    picked.forEach((f) => (f.ing.length ? f.ing : [[f.name, 1]]).forEach(([n, qty]) => map.set(n, (map.get(n) || 0) + qty)));
+    return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [slots.join("|")]);
+
+  const toggle = (id) => setSlots((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length < 3 ? [...s, id] : s));
+
+  const foods = useMemo(() => {
+    const list = FOODS.filter((f) => (biome === "All" || f.biome === biome) && (focus === "All" || f.type === focus) && fuzzy(q, f));
+    const by = { health: (a, b) => b.hp - a.hp, stamina: (a, b) => b.st - a.st, eitr: (a, b) => b.eitr - a.eitr, duration: (a, b) => b.duration - a.duration };
+    return sort === "progression" ? list : [...list].sort(by[sort]);
+  }, [biome, focus, q, sort]);
+  const meads = useMemo(() => {
+    const list = MEADS.filter((m) => (biome === "All" || m.biome === biome) && (cat === "All" || m.category === cat) && fuzzy(q, m));
+    return sort === "duration" ? [...list].sort((a, b) => b.duration - a.duration) : list;
+  }, [biome, cat, q, sort]);
+  const shown = tab === "foods" ? foods : meads;
+  const reset = () => { setBiome("All"); setFocus("All"); setCat("All"); setQ(""); };
+
+  return (
+    <MotionConfig reducedMotion="user">
+      <div className="mx-auto max-w-6xl px-4 pb-16">
+        <header className="pb-5 pt-8">
+          <p className="rune" aria-hidden="true">ᚠᛟᛟᛞ ᚨᚾᛞ ᛗᛖᚨᛞ</p>
+          <h1 className="display text-4xl font-bold text-amber-400 sm:text-5xl">Valheim Mead &amp; Feast Planner</h1>
+          <p className="mt-1 max-w-prose text-lg text-stone-400">Fill three plates, read your health, stamina and eitr before you leave the hall, and see what to gather.</p>
+
+          <section aria-labelledby="presets-h" className="mt-5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h2 id="presets-h" className="text-xs font-bold uppercase tracking-widest text-stone-400">Quick builds</h2>
+              <label htmlFor="tier" className="flex items-center gap-2 text-sm text-stone-400">using food up to
+                <select id="tier" value={tier} onChange={(e) => setTier(+e.target.value)} className="rounded-sm border border-stone-700 px-2 py-1 text-stone-100">
+                  {BIOMES.map((b, i) => <option key={b} value={i}>{b}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
+              {PRESETS.map((p) => (
+                <motion.button key={p.id} whileTap={{ scale: 0.97 }} onClick={() => setSlots(buildPreset(p.pick, tier))}
+                  className="wood group flex items-center gap-2.5 rounded-sm p-2.5 text-left transition-colors hover:border-amber-500">
+                  <p.Icon size={22} className="shrink-0 text-amber-500 transition-transform group-hover:scale-110" aria-hidden="true" />
+                  <span className="min-w-0"><span className="block font-bold leading-tight text-stone-100">{p.label}</span><span className="block text-sm text-stone-400">{p.hint}</span></span>
+                </motion.button>
+              ))}
+            </div>
+          </section>
+        </header>
+
+        {/* Sticky meal builder */}
+        <section aria-label="Meal builder" className="sticky z-20 -mx-4 border-y border-amber-900/60 bg-stone-900/95 px-4 py-3 shadow-xl shadow-black/50 backdrop-blur"
+          style={{ top: "env(safe-area-inset-top, 0px)" }}>
+          <div className="grid grid-cols-3 gap-2">
+            {[0, 1, 2].map((i) => {
+              const f = picked[i];
+              return (
+                <div key={i} className={`flex min-h-[3.25rem] min-w-0 items-center gap-1.5 rounded-sm border px-2 py-1.5 ${f ? "wood" : "border-dashed border-stone-700 bg-stone-950/40"}`}>
+                  <AnimatePresence mode="wait" initial={false}>
+                    {f ? (
+                      <motion.div key={f.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.15 }} className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words text-sm font-bold leading-tight text-stone-100 sm:text-base">{f.name}</p>
+                          <p className="num hidden text-xs text-stone-400 sm:block">{f.hp} / {f.st} / {f.eitr} · {fmtDur(f.duration)}</p>
+                        </div>
+                        <button onClick={() => toggle(f.id)} aria-label={`Remove ${f.name}`} className="shrink-0 rounded-sm p-1 text-stone-400 hover:bg-stone-800 hover:text-amber-300"><X size={16} /></button>
+                      </motion.div>
+                    ) : (
+                      <motion.p key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1.5 text-sm text-stone-500"><Utensils size={14} aria-hidden="true" />Plate {i + 1}</motion.p>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
+            {["hp", "st", "eitr"].map((s) => <StatBar key={s} stat={s} total={totals[s]} parts={picked.map((f) => f[s])} />)}
+            <div className="col-span-3 flex items-center justify-between gap-3 sm:col-span-1 sm:justify-end">
+              <p className="num text-sm text-stone-300"><span className="display text-xl text-red-300">+{totals.regen}</span> hp per 10s tick</p>
+              <div className="flex gap-1.5">
+                <button onClick={() => setShowList((v) => !v)} aria-expanded={showList} className="flex items-center gap-1.5 rounded-sm border border-amber-700 px-2.5 py-1.5 text-sm font-bold text-amber-300 hover:bg-amber-500 hover:text-stone-950">
+                  <Basket size={15} aria-hidden="true" />Shopping list
+                  <Chevron size={14} className={`transition-transform ${showList ? "rotate-180" : ""}`} aria-hidden="true" />
+                </button>
+                <button onClick={() => setSlots([])} disabled={!picked.length} aria-label="Clear all plates" className="rounded-sm border border-stone-700 p-1.5 text-stone-400 hover:border-red-700 hover:text-red-300 disabled:opacity-30"><Trash size={15} /></button>
+              </div>
+            </div>
+          </div>
+          <AnimatePresence initial={false}>
+            {showList && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                <div className="mt-3 max-h-[40vh] overflow-y-auto border-t border-stone-700 pt-3">
+                  {shopping.length ? (
+                    <>
+                      <ul className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3 lg:grid-cols-4">
+                        {shopping.map(([n, qty]) => <li key={n} className="flex items-baseline gap-2 text-stone-200"><span className="num w-8 shrink-0 text-right font-bold text-amber-400">{qty}×</span><span className="min-w-0">{n}</span></li>)}
+                      </ul>
+                      <p className="mt-2 text-sm text-stone-500">Raw ingredients for one craft of each recipe. Base stats without food are 25 health and 50 stamina.</p>
+                    </>
+                  ) : <p className="text-stone-500">Put a food on a plate and its ingredients will be tallied here.</p>}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+
+        {/* Explorer */}
+        <section aria-label="Database" className="pt-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <div role="tablist" className="flex rounded-sm border border-stone-700 bg-stone-950/50 p-0.5">
+              {[["foods", "Foods", Utensils, FOODS.length], ["meads", "Drinks & Meads", Flask, MEADS.length]].map(([id, label, Ic, n]) => (
+                <button key={id} role="tab" aria-selected={tab === id} onClick={() => { setTab(id); setSort("progression"); }}
+                  className={`relative flex items-center gap-1.5 rounded-sm px-3 py-1.5 font-bold transition-colors ${tab === id ? "text-stone-950" : "text-stone-300 hover:text-amber-300"}`}>
+                  {tab === id && <motion.span layoutId="tab" className="absolute inset-0 rounded-sm bg-amber-500" />}
+                  <span className="relative flex items-center gap-1.5"><Ic size={15} aria-hidden="true" />{label}<span className="num text-xs opacity-70">{n}</span></span>
+                </button>
+              ))}
+            </div>
+            <div className="relative min-w-[12rem] flex-1">
+              <Search size={16} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-500" aria-hidden="true" />
+              <label htmlFor="search" className="sr-only">Search by name or ingredient</label>
+              <input id="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or ingredient, e.g. honey"
+                className="w-full rounded-sm border border-stone-700 bg-stone-950/60 py-1.5 pl-8 pr-3 text-stone-100 placeholder:text-stone-500" />
+            </div>
+            <label htmlFor="sort" className="flex items-center gap-2 text-sm text-stone-400">Sort
+              <select id="sort" value={sort} onChange={(e) => setSort(e.target.value)} className="rounded-sm border border-stone-700 px-2 py-1.5 text-stone-100">
+                <option value="progression">Progression order</option>
+                {tab === "foods" && <><option value="health">Highest health</option><option value="stamina">Highest stamina</option><option value="eitr">Highest eitr</option></>}
+                <option value="duration">Longest duration</option>
+              </select>
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Biome filter">
+            {["All", ...BIOMES].map((b) => <Pill key={b} active={biome === b} onClick={() => setBiome(b)}>{b === "All" ? "All biomes" : b}</Pill>)}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5" aria-label={tab === "foods" ? "Stat focus filter" : "Category filter"}>
+            {tab === "foods"
+              ? ["All", "Health", "Stamina", "Eitr", "Balanced"].map((t) => <Pill key={t} active={focus === t} onClick={() => setFocus(t)}>{t === "All" ? "Any focus" : t}</Pill>)
+              : ["All", "Healing", "Stamina", "Resistance", "Utility"].map((t) => <Pill key={t} active={cat === t} onClick={() => setCat(t)}>{t === "All" ? "Any category" : t}</Pill>)}
+          </div>
+
+          <p className="num mt-4 text-sm text-stone-500">{shown.length} {tab === "foods" ? "foods" : "meads"} shown</p>
+          {shown.length === 0 ? (
+            <div className="wood mt-3 rounded-sm p-6 text-center">
+              <p className="text-stone-300">Nothing in the larder matches those filters.</p>
+              <button onClick={reset} className="mt-2 rounded-sm border border-amber-700 px-3 py-1 font-bold text-amber-300 hover:bg-amber-500 hover:text-stone-950">Clear filters</button>
+            </div>
+          ) : (
+            <div className={`mt-3 grid gap-3 ${tab === "foods" ? "sm:grid-cols-2 lg:grid-cols-3" : "lg:grid-cols-2"}`}>
+              <AnimatePresence mode="popLayout" initial={false}>
+                {tab === "foods"
+                  ? foods.map((f) => <FoodCard key={f.id} f={f} selected={slots.includes(f.id)} full={slots.length >= 3} onToggle={toggle} />)
+                  : meads.map((m) => <MeadCard key={m.id} m={m} />)}
+              </AnimatePresence>
+            </div>
+          )}
+        </section>
+
+        <footer className="mt-10 border-t border-stone-800 pt-4 text-sm text-stone-500">
+          <p className="max-w-prose">Stats follow the community wiki. Ashlands recipe quantities and regen ticks, and the Deep North entries from the 1.0 launch guides, are the least certain, so check them in game before a long farming trip. Feasts and the Bog Witch utility brews are not listed.</p>
+        </footer>
+      </div>
+    </MotionConfig>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
