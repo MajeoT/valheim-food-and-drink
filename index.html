@@ -43,7 +43,7 @@ select{background-color:#292524}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.25.6/babel.min.js"></script>
 
 <script type="text/babel" data-presets="react">
-const { useState, useMemo } = React;
+const { useState, useMemo, useEffect } = React;
 const { motion, AnimatePresence, MotionConfig } = window.Motion;
 const L = window.LucideReact || {};
 const icon = (n) => L[n] || (() => null);
@@ -52,7 +52,7 @@ const Heart = icon("Heart"), Zap = icon("Zap"), Sparkles = icon("Sparkles"), Sea
   Utensils = icon("Utensils"), Basket = icon("ShoppingBasket"), Chevron = icon("ChevronDown"),
   Shield = icon("Shield"), Compass = icon("Compass"), Wand = icon("Wand2"), Scale = icon("Scale"),
   Arrow = icon("ArrowRight"), Beer = icon("Beer"), Trash = icon("Trash2"), Hourglass = icon("Hourglass"),
-  Activity = icon("Activity"), Flame = icon("Flame");
+  Activity = icon("Activity"), Flame = icon("Flame"), Info = icon("Info"), Hammer = icon("Hammer");
 
 /* ───────── Data ───────── */
 const BIOMES = ["Meadows", "Black Forest", "Swamps", "Mountain", "Plains", "Mistlands", "Ashlands", "Deep North"];
@@ -173,6 +173,31 @@ const PRESETS = [
   { id: "balanced", label: "Balanced Adventurer", hint: "health + stamina + eitr", Icon: Scale, pick: ["hp", "st", "eitr"] },
 ];
 
+// What you need to build each station. `fire` and `near` are placement rules.
+const STATIONS = {
+  "Cooking Station": { title: "Cooking Station", cost: [["Wood", 2]], near: "No crafting station needed.", fire: "Place it over a lit campfire or hearth.", note: "Hang raw meat or fish on it and take it off before it burns." },
+  "Iron Cooking Station": { title: "Iron Cooking Station", cost: [["Iron", 3], ["Chain", 3]], near: "Forge nearby to build.", fire: "Needs a hearth, or two campfires, underneath.", note: "Cooks the big cuts the wooden station cannot hold, such as serpent and lox meat." },
+  Cauldron: { title: "Cauldron", cost: [["Tin", 10]], near: "Forge nearby to build.", fire: "Needs a lit campfire or hearth underneath to cook.",
+    levels: [
+      [1, "Cauldron", [["Tin", 10]]],
+      [2, "Spice rack", [["Dandelion", 3], ["Carrot", 2], ["Mushroom", 5], ["Thistle", 3], ["Turnip", 3]]],
+      [3, "Butcher's table", [["Ancient bark", 2], ["Core wood", 4], ["Silver", 2]]],
+      [4, "Pots and pans", [["Iron", 5], ["Copper", 5], ["Black metal", 5], ["Fine wood", 10]]],
+      [5, "Mortar and pestle", null],
+      [6, "Rolling pins and cutting boards", null],
+    ], note: "Each upgrade is a separate piece built close to the cauldron, and each one raises its level by one." },
+  Oven: { title: "Stone Oven", cost: [["Iron", 15], ["Stone", 20], ["Surtling core", 4]], near: "Artisan table nearby to build.", fire: "Burns wood as fuel, loaded into the lower opening.", note: "Bakes the uncooked pie, bread or dish you first prepare in the cauldron." },
+  Smoker: { title: "Smoker", cost: [["Bloodgold", 5], ["Timberwood", 6]], near: "Placement rules not confirmed yet.", fire: null, note: "Deep North station. Cost is from a 1.0 launch guide, so check it in the build menu." },
+  Beehive: { title: "Beehive", cost: [["Wood", 10], ["Queen bee", 1]], near: "Workbench nearby to build.", fire: null, note: "Needs open space around it. Queen bees come from wild hives in abandoned Meadows houses." },
+  Farmed: { title: "Farmed crop", cost: [["Core wood", 5], ["Bronze", 5]], near: "Craft the Cultivator at a Forge.", fire: null, note: "The materials are for a Cultivator. Till soil with it, plant the seeds, and harvest when grown." },
+  "Mead Ketill": { title: "Mead Ketill", cost: [["Tin", 4], ["Copper", 6], ["Leather scraps", 2]], near: "Forge nearby to build.", fire: "Needs a lit campfire underneath to brew.", note: "Brews the mead base, which then goes into a Fermenter." },
+  Fermenter: { title: "Fermenter", cost: [["Fine wood", 30], ["Bronze", 5], ["Resin", 10]], near: "Forge nearby to build.", fire: null, note: "Keep it under a roof and away from fire. One base ferments into six meads in two in-game days." },
+};
+const CAULDRON_LV = { Meadows: 1, "Black Forest": 1, Swamps: 2, Mountain: 3, Plains: 4, Mistlands: 5, Ashlands: 6 };
+const CAULDRON_LV_FOOD = { "Cooked egg": 1, "Fiery svinstew": 5, "Spicy marmalade": 5, "Sizzling berry broth": 5 };
+const cauldronLevel = (f) => CAULDRON_LV_FOOD[f.name] ?? CAULDRON_LV[f.biome] ?? null;
+const stationParts = (st) => st.split(/\s*(?:\+|→)\s*/);
+
 /* ───────── Helpers ───────── */
 const fmtDur = (s) => (s >= 60 ? `${Math.round(s / 60)}m` : `${s}s`);
 const fuzzyOne = (q, t) => {
@@ -206,11 +231,11 @@ const STAT = {
   st: { label: "Stamina", Icon: Zap, text: "text-yellow-300", bg: "bg-yellow-400", chip: "bg-yellow-950/60 text-yellow-200 border-yellow-700/60", max: 400 },
   eitr: { label: "Eitr", Icon: Sparkles, text: "text-purple-300", bg: "bg-purple-500", chip: "bg-purple-950/70 text-purple-200 border-purple-700/70", max: 350 },
 };
-const Badge = ({ stat, value }) => {
+const Badge = ({ stat, value, small }) => {
   const s = STAT[stat];
   return (
-    <span className={`num inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-sm font-bold ${s.chip} ${value ? "" : "opacity-35"}`} title={s.label}>
-      <s.Icon size={13} strokeWidth={2.5} aria-hidden="true" />{value}<span className="sr-only"> {s.label}</span>
+    <span className={`num inline-flex items-center rounded-sm border font-bold ${small ? "gap-0.5 px-1 py-px text-xs" : "gap-1 px-1.5 py-0.5 text-sm"} ${s.chip} ${value ? "" : "opacity-35"}`} title={s.label}>
+      <s.Icon size={small ? 11 : 13} strokeWidth={2.5} aria-hidden="true" />{value}<span className="sr-only"> {s.label}</span>
     </span>
   );
 };
@@ -246,8 +271,77 @@ const StatBar = ({ stat, total, parts }) => {
   );
 };
 
+const StationChips = ({ station, level, onOpen }) => {
+  const parts = stationParts(station);
+  const isSource = ["Foraged", "Farmed", "Beehive"].includes(parts[0]);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-xs font-bold uppercase tracking-wider text-stone-400">{isSource ? "From" : "Made at"}</span>
+      {parts.map((p) => STATIONS[p] ? (
+        <button key={p} onClick={() => onOpen({ name: p, level: p === "Cauldron" ? level : null })} title={`What you need for the ${STATIONS[p].title}`}
+          className="flex items-center gap-1 rounded-sm border border-amber-600 bg-amber-950/60 px-1.5 py-0.5 text-sm font-bold text-amber-200 transition-colors hover:bg-amber-500 hover:text-stone-950">
+          <Hammer size={13} aria-hidden="true" />{STATIONS[p].title}{p === "Cauldron" && level ? ` Lv ${level}` : ""}<Info size={12} className="opacity-70" aria-hidden="true" />
+        </button>
+      ) : <span key={p} className="rounded-sm border border-stone-700 px-1.5 py-0.5 text-sm text-stone-300">{p === "Foraged" ? "The wild" : p}</span>)}
+    </div>
+  );
+};
+
+const CostList = ({ cost }) => (
+  <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-stone-200">
+    {cost.map(([n, q]) => <li key={n}><span className="num font-bold text-amber-400">{q}×</span> {n}</li>)}
+  </ul>
+);
+const StationModal = ({ open, onClose }) => {
+  const st = STATIONS[open.name];
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  return (
+    <motion.div className="fixed inset-0 z-40 flex items-end justify-center bg-black/75 p-4 sm:items-center" onClick={onClose}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <motion.div role="dialog" aria-modal="true" aria-labelledby="station-h" onClick={(e) => e.stopPropagation()}
+        initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 24, opacity: 0 }} transition={{ duration: 0.18 }}
+        className="wood max-h-[85vh] w-full max-w-md overflow-y-auto rounded-sm p-4 shadow-2xl shadow-black">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-500">How to build</p>
+            <h2 id="station-h" className="display text-3xl leading-tight text-stone-100">{st.title}</h2>
+          </div>
+          <button onClick={onClose} autoFocus className="flex shrink-0 items-center gap-1 rounded-sm border border-stone-600 px-2 py-1 text-sm font-bold text-stone-200 hover:border-amber-500 hover:text-amber-300"><X size={14} aria-hidden="true" />Close</button>
+        </div>
+        {st.levels ? (
+          <div className="mt-3">
+            {open.level && <p className="mb-2 rounded-sm border border-amber-700 bg-amber-950/50 px-2 py-1 text-amber-100">This recipe needs a <strong>level {open.level}</strong> cauldron, so build every piece up to and including level {open.level}.</p>}
+            <ol className="flex flex-col gap-1.5">
+              {st.levels.map(([lv, name, cost]) => (
+                <li key={lv} className={`rounded-sm border px-2 py-1.5 ${open.level && lv <= open.level ? "border-amber-700/80 bg-stone-950/50" : "border-stone-700/70 opacity-60"}`}>
+                  <p className="font-bold text-stone-100"><span className="num text-amber-400">Lv {lv}</span> · {name}</p>
+                  {cost ? <CostList cost={cost} /> : <p className="text-sm italic text-stone-400">Materials not confirmed here. Check the build menu.</p>}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : (
+          <div className="mt-3">
+            <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-stone-400">Materials</h3>
+            <CostList cost={st.cost} />
+          </div>
+        )}
+        <dl className="mt-3 flex flex-col gap-1.5 border-t border-stone-700 pt-3 text-stone-300">
+          <div><dt className="text-xs font-bold uppercase tracking-wider text-stone-400">Placement</dt><dd>{st.near}</dd></div>
+          {st.fire && <div><dt className="text-xs font-bold uppercase tracking-wider text-stone-400">Heat</dt><dd>{st.fire}</dd></div>}
+        </dl>
+        <p className="mt-3 text-sm text-stone-400">{st.note}</p>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 /* ───────── Cards ───────── */
-const FoodCard = ({ f, selected, full, onToggle }) => (
+const FoodCard = ({ f, selected, full, onToggle, onStation }) => (
   <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
     whileHover={{ y: -3 }} transition={{ duration: 0.18 }}
     className={`wood flex flex-col gap-2 rounded-sm p-3 shadow-lg shadow-black/30 ${selected ? "ring-2 ring-amber-500" : "hover:border-amber-700"}`}>
@@ -267,8 +361,8 @@ const FoodCard = ({ f, selected, full, onToggle }) => (
     <dl className="num flex flex-wrap gap-x-4 gap-y-1 text-sm text-stone-400">
       <div className="flex items-center gap-1"><Clock size={13} aria-hidden="true" /><dt className="sr-only">Duration</dt><dd>{fmtDur(f.duration)}</dd></div>
       <div className="flex items-center gap-1"><Activity size={13} aria-hidden="true" /><dt className="sr-only">Health regen</dt><dd>{f.regen} hp/tick</dd></div>
-      <div className="flex items-center gap-1"><Flame size={13} aria-hidden="true" /><dt className="sr-only">Station</dt><dd>{f.station}</dd></div>
     </dl>
+    <StationChips station={f.station} level={cauldronLevel(f)} onOpen={onStation} />
     <div className="mt-auto border-t border-stone-700/70 pt-2">
       <Ingredients ing={f.ing} />
       {f.yieldN > 1 && <p className="mt-1 text-xs text-stone-500">One craft makes {f.yieldN}.</p>}
@@ -284,7 +378,7 @@ const Step = ({ Icon, title, children }) => (
     {children}
   </div>
 );
-const MeadCard = ({ m }) => (
+const MeadCard = ({ m, onStation }) => (
   <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
     whileHover={{ y: -3 }} transition={{ duration: 0.18 }} className="wood flex flex-col gap-3 rounded-sm p-3.5 shadow-lg shadow-black/30 hover:border-amber-700">
     <header className="flex items-start justify-between gap-2">
@@ -299,8 +393,9 @@ const MeadCard = ({ m }) => (
       <span className="flex items-center gap-1"><Clock size={13} aria-hidden="true" />Lasts {fmtDur(m.duration)}</span>
       <span className="flex items-center gap-1"><Hourglass size={13} aria-hidden="true" />Cooldown {fmtDur(m.cooldown)}</span>
     </p>
+    <StationChips station={m.station} onOpen={onStation} />
     <div className="mt-auto flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-stretch">
-      <Step Icon={Flame} title="Mead base"><Ingredients ing={m.ing} /></Step>
+      <Step Icon={Flame} title="Mead base (Mead Ketill)"><Ingredients ing={m.ing} /></Step>
       <Arrow size={16} className="hidden shrink-0 self-center text-amber-600 sm:block" aria-hidden="true" />
       <Step Icon={Hourglass} title="Ferment"><p className="text-sm text-stone-300">2 in-game days in a Fermenter, about 1 hour of play.</p></Step>
       <Arrow size={16} className="hidden shrink-0 self-center text-amber-600 sm:block" aria-hidden="true" />
@@ -320,6 +415,7 @@ function App() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("progression");
   const [showList, setShowList] = useState(false);
+  const [station, setStation] = useState(null);
 
   const picked = slots.map((id) => FOODS.find((f) => f.id === id)).filter(Boolean);
   const totals = {
@@ -384,18 +480,24 @@ function App() {
             {[0, 1, 2].map((i) => {
               const f = picked[i];
               return (
-                <div key={i} className={`flex min-h-[3.25rem] min-w-0 items-center gap-1.5 rounded-sm border px-2 py-1.5 ${f ? "wood" : "border-dashed border-stone-700 bg-stone-950/40"}`}>
+                <div key={i} className={`flex min-h-[4.5rem] min-w-0 items-stretch rounded-sm border px-2 py-1.5 ${f ? "wood" : "items-center border-dashed border-stone-700 bg-stone-950/40"}`}>
                   <AnimatePresence mode="wait" initial={false}>
                     {f ? (
-                      <motion.div key={f.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.15 }} className="flex min-w-0 flex-1 items-center gap-1.5">
-                        <div className="min-w-0 flex-1">
-                          <p className="break-words text-sm font-bold leading-tight text-stone-100 sm:text-base">{f.name}</p>
-                          <p className="num hidden text-xs text-stone-400 sm:block">{f.hp} / {f.st} / {f.eitr} · {fmtDur(f.duration)}</p>
+                      <motion.div key={f.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.15 }} className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <div className="flex items-start justify-between gap-1.5">
+                          <p className="min-w-0 break-words text-sm font-bold leading-tight text-stone-100 sm:text-base">{f.name}</p>
+                          <button onClick={() => toggle(f.id)} aria-label={`Remove ${f.name} from plate ${i + 1}`}
+                            className="flex shrink-0 items-center gap-1 rounded-sm border border-red-800 bg-red-950/60 px-1.5 py-0.5 text-xs font-bold text-red-200 transition-colors hover:bg-red-600 hover:text-white">
+                            <X size={13} aria-hidden="true" /><span className="hidden sm:inline">Remove</span>
+                          </button>
                         </div>
-                        <button onClick={() => toggle(f.id)} aria-label={`Remove ${f.name}`} className="shrink-0 rounded-sm p-1 text-stone-400 hover:bg-stone-800 hover:text-amber-300"><X size={16} /></button>
+                        <div className="mt-auto flex flex-wrap items-center gap-1">
+                          {["hp", "st", "eitr"].filter((k) => f[k] > 0).map((k) => <Badge key={k} stat={k} value={`+${f[k]}`} small />)}
+                          <span className="num hidden text-xs text-stone-400 sm:inline">{fmtDur(f.duration)}</span>
+                        </div>
                       </motion.div>
                     ) : (
-                      <motion.p key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1.5 text-sm text-stone-500"><Utensils size={14} aria-hidden="true" />Plate {i + 1}</motion.p>
+                      <motion.p key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1.5 self-center text-sm text-stone-500"><Utensils size={14} aria-hidden="true" />Plate {i + 1} is empty</motion.p>
                     )}
                   </AnimatePresence>
                 </div>
@@ -406,12 +508,12 @@ function App() {
             {["hp", "st", "eitr"].map((s) => <StatBar key={s} stat={s} total={totals[s]} parts={picked.map((f) => f[s])} />)}
             <div className="col-span-3 flex items-center justify-between gap-3 sm:col-span-1 sm:justify-end">
               <p className="num text-sm text-stone-300"><span className="display text-xl text-red-300">+{totals.regen}</span> hp per 10s tick</p>
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap justify-end gap-1.5">
                 <button onClick={() => setShowList((v) => !v)} aria-expanded={showList} className="flex items-center gap-1.5 rounded-sm border border-amber-700 px-2.5 py-1.5 text-sm font-bold text-amber-300 hover:bg-amber-500 hover:text-stone-950">
                   <Basket size={15} aria-hidden="true" />Shopping list
                   <Chevron size={14} className={`transition-transform ${showList ? "rotate-180" : ""}`} aria-hidden="true" />
                 </button>
-                <button onClick={() => setSlots([])} disabled={!picked.length} aria-label="Clear all plates" className="rounded-sm border border-stone-700 p-1.5 text-stone-400 hover:border-red-700 hover:text-red-300 disabled:opacity-30"><Trash size={15} /></button>
+                <button onClick={() => setSlots([])} disabled={!picked.length} className="flex items-center gap-1.5 rounded-sm border border-stone-600 px-2.5 py-1.5 text-sm font-bold text-stone-300 hover:border-red-600 hover:text-red-300 disabled:opacity-30"><Trash size={15} aria-hidden="true" />Clear plates</button>
               </div>
             </div>
           </div>
@@ -478,15 +580,17 @@ function App() {
             <div className={`mt-3 grid gap-3 ${tab === "foods" ? "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" : "lg:grid-cols-2"}`}>
               <AnimatePresence mode="popLayout" initial={false}>
                 {tab === "foods"
-                  ? foods.map((f) => <FoodCard key={f.id} f={f} selected={slots.includes(f.id)} full={slots.length >= 3} onToggle={toggle} />)
-                  : meads.map((m) => <MeadCard key={m.id} m={m} />)}
+                  ? foods.map((f) => <FoodCard key={f.id} f={f} selected={slots.includes(f.id)} full={slots.length >= 3} onToggle={toggle} onStation={setStation} />)
+                  : meads.map((m) => <MeadCard key={m.id} m={m} onStation={setStation} />)}
               </AnimatePresence>
             </div>
           )}
         </section>
 
+        <AnimatePresence>{station && <StationModal key="station" open={station} onClose={() => setStation(null)} />}</AnimatePresence>
+
         <footer className="mt-10 border-t border-stone-800 pt-4 text-sm text-stone-500">
-          <p className="max-w-prose">Stats follow the community wiki. Ashlands recipe quantities and regen ticks, and the Deep North entries from the 1.0 launch guides, are the least certain, so check them in game before a long farming trip. Feasts and the Bog Witch utility brews are not listed.</p>
+          <p className="max-w-prose">Stats follow the community wiki. Ashlands recipe quantities and regen ticks, and the Deep North entries from the 1.0 launch guides, are the least certain, so check them in game before a long farming trip. Station build costs come from memory and guides, so treat them as a guide too. Feasts and the Bog Witch utility brews are not listed.</p>
         </footer>
       </div>
     </MotionConfig>
