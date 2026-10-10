@@ -519,6 +519,10 @@ const UPDATES = [
   { v: 5, date: "10 Oct 2026", items: [
     ["More control over custom items", "Custom foods and meads can now be renamed, given any crafting station (including one you type in), a cauldron level, and how many each craft makes. The biome choice sets their colour, filter and trophies."],
   ] },
+  { v: 6, date: "10 Oct 2026", items: [
+    ["Update notes page", "Every update is now kept on its own page. Use the All update notes link below, or Update notes at the bottom of the planner, to read them any time."],
+    ["Custom mead button", "Add custom food and Add custom mead now both show above the cards, whichever tab you are on."],
+  ] },
 ];
 const LATEST = UPDATES[UPDATES.length - 1].v;
 const NEWS_KEY = "valheim-planner-news-seen";      // first release stored a text id here
@@ -791,26 +795,45 @@ const TrophyModal = ({ open, foods, ranks, slots, onToggle, onShow, onClose }) =
     </Modal>
   );
 };
-const NewsModal = ({ since, onClose }) => {
+const UpdateList = ({ list }) => (
+  <div className="flex flex-col gap-4">
+    {list.map((u) => (
+      <section key={u.v}>
+        <h3 className="mb-1.5 border-b border-stone-700 pb-1 text-xs font-bold uppercase tracking-wider text-stone-400">Update {u.v} · {u.date}</h3>
+        <ul className="flex flex-col gap-2">
+          {u.items.map(([t, d]) => <li key={t}><p className="font-bold text-amber-200">{t}</p><p className="text-sm text-stone-300">{d}</p></li>)}
+        </ul>
+      </section>
+    ))}
+  </div>
+);
+const NewsModal = ({ since, onClose, onAll }) => {
   const list = UPDATES.filter((u) => u.v > since).reverse();
   return (
     <Modal labelId="news-h" onClose={onClose}>
-      <ModalHead id="news-h" eyebrow={since === 0 ? "Update history" : list.length > 1 ? `${list.length} updates since your last visit` : "Latest update"} title="What's new" onClose={onClose} closeLabel="Dismiss" />
-      <div className="mt-3 flex flex-col gap-4">
-        {list.map((u) => (
-          <section key={u.v}>
-            <h3 className="mb-1.5 border-b border-stone-700 pb-1 text-xs font-bold uppercase tracking-wider text-stone-400">Update {u.v} · {u.date}</h3>
-            <ul className="flex flex-col gap-2">
-              {u.items.map(([t, d]) => <li key={t}><p className="font-bold text-amber-200">{t}</p><p className="text-sm text-stone-300">{d}</p></li>)}
-            </ul>
-          </section>
-        ))}
-      </div>
+      <ModalHead id="news-h" eyebrow={list.length > 1 ? `${list.length} updates since your last visit` : "Latest update"} title="What's new" onClose={onClose} closeLabel="Dismiss" />
+      <div className="mt-3"><UpdateList list={list} /></div>
       <button onClick={onClose} className="mt-4 w-full rounded-sm border border-amber-600 bg-amber-500 px-3 py-2 font-bold text-stone-950 hover:bg-amber-400">Got it</button>
-      <p className="mt-2 text-center text-xs text-stone-500">This will not show again until the next update.</p>
+      <p className="mt-2 text-center text-xs text-stone-500">This will not show again until the next update.{" "}
+        <button type="button" onClick={onAll} className="underline decoration-dotted underline-offset-2 hover:text-amber-300">All update notes</button>
+      </p>
     </Modal>
   );
 };
+const UpdatesPage = ({ onBack }) => (
+  <div className="mx-auto max-w-3xl px-4 pb-16 pt-8">
+    <button type="button" onClick={onBack} className="flex items-center gap-1.5 rounded-sm border border-amber-700 px-2.5 py-1.5 text-sm font-bold text-amber-300 hover:bg-amber-500 hover:text-stone-950">
+      <Arrow size={15} className="rotate-180" aria-hidden="true" />Back to the planner
+    </button>
+    <p className="rune mt-6" aria-hidden="true">ᚾᛖᚹᛊ</p>
+    <h1 className="display text-4xl font-bold text-amber-400 sm:text-5xl">Update Notes</h1>
+    <p className="mt-1 max-w-prose text-lg text-stone-400">Every change made to the Valheim Mead &amp; Feast Planner, newest first.</p>
+    <div className="wood mt-6 rounded-sm p-4"><UpdateList list={[...UPDATES].reverse()} /></div>
+    <button type="button" onClick={onBack} className="mt-6 flex items-center gap-1.5 text-sm font-bold text-stone-400 underline decoration-dotted underline-offset-2 hover:text-amber-300">
+      <Arrow size={14} className="rotate-180" aria-hidden="true" />Back to the planner
+    </button>
+  </div>
+);
 
 const FOOD_FIELDS = [["hp", "Health", (f) => f.hp], ["st", "Stamina", (f) => f.st], ["eitr", "Eitr", (f) => f.eitr], ["min", "Lasts (min)", (f) => Math.round(f.duration / 60)], ["regen", "Regen / tick", (f) => f.regen]];
 const MEAD_FIELDS = [["duration", "Lasts (sec)", (m) => m.duration], ["cooldown", "Cooldown (sec)", (m) => m.cooldown]];
@@ -1359,6 +1382,17 @@ function App() {
   const saveEdit = (id, patch) => setEdits((prev) => { const next = { ...prev }; delete next[id]; return patch ? { ...next, ...cleanEdits({ [id]: patch }) } : next; });
   const [ingredient, setIngredient] = useState(null);
   const [news, setNews] = useState(() => { const seen = lastSeenUpdate(); return seen < LATEST ? { since: seen } : null; });
+  const [page, setPage] = useState(() => { try { return window.location.hash === "#updates" ? "updates" : "planner"; } catch (e) { return "planner"; } });
+  useEffect(() => {
+    const onHash = () => setPage(window.location.hash === "#updates" ? "updates" : "planner");
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  const goPage = (next) => {
+    setPage(next);
+    try { if (next === "updates") window.location.hash = "updates"; else window.history.replaceState(null, "", window.location.pathname + window.location.search); } catch (e) {}
+    try { window.scrollTo(0, 0); } catch (e) {}
+  };
   const closeNews = () => { try { localStorage.setItem(NEWS_VER_KEY, String(LATEST)); } catch (e) {} setNews(null); };
   const [slots, setSlots] = useState(() => loadPlates(new Set(foodsAll.map((f) => f.id))) || buildPreset(["hp", "st", "eitr"], 7, foodsAll));
   useEffect(() => { try { localStorage.setItem(PLATE_KEY, JSON.stringify(slots)); } catch (e) {} }, [slots]);
@@ -1427,6 +1461,8 @@ function App() {
   const shown = tab === "foods" ? foods : meads;
   const ranks = useMemo(() => { const out = {}; BIOMES.forEach((b) => Object.assign(out, rankFoods(foodsAll.filter((f) => f.biome === b)))); return out; }, [foodsAll]);
   const reset = () => { setBiome("All"); setFocus("All"); setCat("All"); setQ(""); };
+
+  if (page === "updates") return <MotionConfig reducedMotion="user"><UpdatesPage onBack={() => goPage("planner")} /></MotionConfig>;
 
   return (
     <MotionConfig reducedMotion="user">
@@ -1598,11 +1634,11 @@ function App() {
         <AnimatePresence>{trophy && <TrophyModal key="trophy" open={trophy} foods={foodsAll} ranks={ranks} slots={slots} onToggle={toggle} onClose={() => setTrophy(null)}
           onShow={(f) => { setTab("foods"); setSort("progression"); setBiome("All"); setFocus("All"); setQ(f.name); setTrophy(null); }} />}</AnimatePresence>
         <AnimatePresence>{customForm && <CustomModal key={"custom-" + customForm.kind + (customForm.item ? customForm.item.id : "")} form={customForm} onSave={(kind, raw, id) => { const problem = saveCustom(kind, raw, id); if (!problem) { setTab(kind === "food" ? "foods" : "meads"); setSort("progression"); } return problem; }} onClose={() => setCustomForm(null)} />}</AnimatePresence>
-        <AnimatePresence>{news && !station && !ingredient && !customForm && !trophy && <NewsModal key="news" since={news.since} onClose={closeNews} />}</AnimatePresence>
+        <AnimatePresence>{news && !station && !ingredient && !customForm && !trophy && <NewsModal key="news" since={news.since} onClose={closeNews} onAll={() => { closeNews(); goPage("updates"); }} />}</AnimatePresence>
 
         <footer className="mt-10 border-t border-stone-800 pt-4 text-sm text-stone-500">
           <p className="max-w-prose">Stats follow the community wiki. Ashlands recipe quantities and regen ticks, and the Deep North entries from the 1.0 launch guides, are the least certain, so check them in game before a long farming trip. Station build costs come from memory and guides, so treat them as a guide too. Feasts and the Bog Witch utility brews are not listed.</p>
-          <button type="button" onClick={() => setNews({ since: 0 })} className="mt-2 flex items-center gap-1.5 text-sm font-bold text-stone-400 underline decoration-dotted underline-offset-2 hover:text-amber-300"><Megaphone size={14} aria-hidden="true" />What's new</button>
+          <button type="button" onClick={() => goPage("updates")} className="mt-2 flex items-center gap-1.5 text-sm font-bold text-stone-400 underline decoration-dotted underline-offset-2 hover:text-amber-300"><Megaphone size={14} aria-hidden="true" />Update notes</button>
         </footer>
       </div>
     </MotionConfig>
