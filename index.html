@@ -52,7 +52,7 @@ const Heart = icon("Heart"), Zap = icon("Zap"), Sparkles = icon("Sparkles"), Sea
   Utensils = icon("Utensils"), Basket = icon("ShoppingBasket"), Chevron = icon("ChevronDown"),
   Shield = icon("Shield"), Compass = icon("Compass"), Wand = icon("Wand2"), Scale = icon("Scale"),
   Arrow = icon("ArrowRight"), Beer = icon("Beer"), Trash = icon("Trash2"), Hourglass = icon("Hourglass"),
-  Activity = icon("Activity"), Flame = icon("Flame"), Info = icon("Info"), Hammer = icon("Hammer");
+  Activity = icon("Activity"), Timer = icon("Timer"), Flame = icon("Flame"), Info = icon("Info"), Hammer = icon("Hammer");
 
 /* ───────── Data ───────── */
 const BIOMES = ["Meadows", "Black Forest", "Swamps", "Mountain", "Plains", "Mistlands", "Ashlands", "Deep North"];
@@ -359,7 +359,7 @@ const FoodCard = ({ f, selected, full, onToggle, onStation }) => (
       <Badge stat="hp" value={f.hp} /><Badge stat="st" value={f.st} /><Badge stat="eitr" value={f.eitr} />
     </div>
     <dl className="num flex flex-wrap gap-x-4 gap-y-1 text-sm text-stone-400">
-      <div className="flex items-center gap-1"><Clock size={13} aria-hidden="true" /><dt className="sr-only">Duration</dt><dd>{fmtDur(f.duration)}</dd></div>
+      <div className="flex items-center gap-1" title="How long this food lasts after eating"><Timer size={13} aria-hidden="true" /><dt className="sr-only">Duration</dt><dd>Lasts {fmtDur(f.duration)}</dd></div>
       <div className="flex items-center gap-1"><Activity size={13} aria-hidden="true" /><dt className="sr-only">Health regen</dt><dd>{f.regen} hp/tick</dd></div>
     </dl>
     <StationChips station={f.station} level={cauldronLevel(f)} onOpen={onStation} />
@@ -493,7 +493,7 @@ function App() {
                         </div>
                         <div className="mt-auto flex flex-wrap items-center gap-1">
                           {["hp", "st", "eitr"].filter((k) => f[k] > 0).map((k) => <Badge key={k} stat={k} value={`+${f[k]}`} small />)}
-                          <span className="num hidden text-xs text-stone-400 sm:inline">{fmtDur(f.duration)}</span>
+                          <span className="num inline-flex items-center gap-0.5 rounded-sm border border-stone-600 px-1 py-px text-xs font-bold text-stone-300" title="How long this food lasts after eating"><Timer size={11} aria-hidden="true" />{fmtDur(f.duration)}<span className="hidden font-normal sm:inline">&nbsp;buff</span></span>
                         </div>
                       </motion.div>
                     ) : (
