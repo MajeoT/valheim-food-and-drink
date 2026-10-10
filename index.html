@@ -1551,10 +1551,12 @@ function App() {
             </label>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => setCustomForm({ kind: tab === "foods" ? "food" : "mead", item: null })}
-              className="flex items-center gap-1.5 rounded-sm border border-pink-400 px-2.5 py-1.5 text-sm font-bold text-pink-200 transition-colors hover:bg-pink-400 hover:text-stone-950">
-              <Plus size={15} aria-hidden="true" />Add custom {tab === "foods" ? "food" : "mead"}
-            </button>
+            {["food", "mead"].map((kind) => (
+              <button key={kind} type="button" onClick={() => setCustomForm({ kind, item: null })}
+                className="flex items-center gap-1.5 rounded-sm border border-pink-400 px-2.5 py-1.5 text-sm font-bold text-pink-200 transition-colors hover:bg-pink-400 hover:text-stone-950">
+                <Plus size={15} aria-hidden="true" />Add custom {kind}
+              </button>
+            ))}
             <span className="text-sm text-stone-400">Missing something? Add your own. It is saved on this device and always marked <CustomTag small />.</span>
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Biome filter">
@@ -1595,7 +1597,7 @@ function App() {
         <AnimatePresence>{ingredient && <IngredientModal key="ingredient" name={ingredient} foods={foodsAll} onPick={setIngredient} onClose={() => setIngredient(null)} />}</AnimatePresence>
         <AnimatePresence>{trophy && <TrophyModal key="trophy" open={trophy} foods={foodsAll} ranks={ranks} slots={slots} onToggle={toggle} onClose={() => setTrophy(null)}
           onShow={(f) => { setTab("foods"); setSort("progression"); setBiome("All"); setFocus("All"); setQ(f.name); setTrophy(null); }} />}</AnimatePresence>
-        <AnimatePresence>{customForm && <CustomModal key={"custom-" + customForm.kind + (customForm.item ? customForm.item.id : "")} form={customForm} onSave={saveCustom} onClose={() => setCustomForm(null)} />}</AnimatePresence>
+        <AnimatePresence>{customForm && <CustomModal key={"custom-" + customForm.kind + (customForm.item ? customForm.item.id : "")} form={customForm} onSave={(kind, raw, id) => { const problem = saveCustom(kind, raw, id); if (!problem) { setTab(kind === "food" ? "foods" : "meads"); setSort("progression"); } return problem; }} onClose={() => setCustomForm(null)} />}</AnimatePresence>
         <AnimatePresence>{news && !station && !ingredient && !customForm && !trophy && <NewsModal key="news" since={news.since} onClose={closeNews} />}</AnimatePresence>
 
         <footer className="mt-10 border-t border-stone-800 pt-4 text-sm text-stone-500">
