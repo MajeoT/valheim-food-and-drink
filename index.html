@@ -527,6 +527,10 @@ const UPDATES = [
     ["Favourites", "Press the star beside any food or mead name to pin it in a Favourites section above the full list."],
     ["Steadier cards", "Biome, focus, trophy and stat badges now sit in the same place on every food card. Health regen sits under the health badge, and foods that craft several at once show ×4 beside their name."],
   ] },
+  { v: 8, date: "10 Oct 2026", items: [
+    ["More on your plates", "Each plate now shows the food's biome and trophy, and a Recipe arrow that opens its crafting station and ingredients."],
+    ["Tidier food cards", "Made at and Recipe each have their own panel, and biome, focus and trophy share one line."],
+  ] },
 ];
 const LATEST = UPDATES[UPDATES.length - 1].v;
 const NEWS_KEY = "valheim-planner-news-seen";      // first release stored a text id here
@@ -1425,6 +1429,7 @@ function App() {
   const [slots, setSlots] = useState(() => loadPlates(new Set(foodsAll.map((f) => f.id))) || buildPreset(["hp", "st", "eitr"], 7, foodsAll));
   useEffect(() => { try { localStorage.setItem(PLATE_KEY, JSON.stringify(slots)); } catch (e) {} }, [slots]);
   const [trophy, setTrophy] = useState(null);
+  const [plateOpen, setPlateOpen] = useState({});
   const [favs, setFavs] = useState(loadFavs);
   useEffect(() => { try { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); } catch (e) {} }, [favs]);
   const toggleFav = (id) => setFavs((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
@@ -1556,6 +1561,21 @@ function App() {
                           {["hp", "st", "eitr"].filter((k) => f[k] > 0).map((k) => <Badge key={k} stat={k} value={`+${f[k]}`} small />)}
                           <span className="num inline-flex items-center gap-0.5 rounded-sm border border-stone-600 px-1 py-px text-xs font-bold text-stone-300" title="How long this food lasts after eating"><Timer size={11} aria-hidden="true" />{fmtDur(f.duration)}<span className="hidden font-normal sm:inline">&nbsp;buff</span></span>
                         </div>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <BiomeTag biome={f.biome} />
+                          {ranks[f.id] && <TrophyTag rank={ranks[f.id]} type={f.type} scope={`in ${f.biome}`} onOpen={() => setTrophy({ biome: f.biome, type: f.type, rank: ranks[f.id] })} />}
+                        </div>
+                        <button type="button" onClick={() => setPlateOpen((o) => ({ ...o, [f.id]: !o[f.id] }))} aria-expanded={!!plateOpen[f.id]}
+                          title={plateOpen[f.id] ? "Hide how to make this" : "Show where it is made and what it needs"}
+                          className="flex w-full items-center justify-center gap-1 rounded-sm border border-stone-500 bg-stone-950/50 px-1.5 py-0.5 text-xs font-bold text-stone-100 transition-colors hover:border-amber-500 hover:text-amber-300">
+                          <Chevron size={15} className={`transition-transform ${plateOpen[f.id] ? "rotate-180" : ""}`} aria-hidden="true" />{plateOpen[f.id] ? "Hide recipe" : "Recipe"}
+                        </button>
+                        {plateOpen[f.id] && (
+                          <div className="flex max-h-44 flex-col gap-1.5 overflow-y-auto border-t border-stone-700 pt-1.5">
+                            <StationChips station={f.station} level={cauldronLevel(f)} onOpen={setStation} />
+                            <Ingredients ing={f.ing} onPick={setIngredient} />
+                          </div>
+                        )}
                       </motion.div>
                     ) : (
                       <motion.p key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1.5 self-center text-sm text-stone-500"><Utensils size={14} aria-hidden="true" />Plate {i + 1} is empty</motion.p>
