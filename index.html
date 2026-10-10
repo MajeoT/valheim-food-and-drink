@@ -444,14 +444,23 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
     r.onerror = () => setMsg("Could not read that file. Try pasting its text instead.");
     r.readAsText(file); e.target.value = "";
   };
-  const download = () => {
+  const download = async () => {
+    const filename = "valheim-meal-presets.json";
+    // Inside Claude the page must ask the viewer to save; on a normal website a plain browser download works.
+    if (window.claude && window.claude.use) {
+      const downloads = await window.claude.use("downloads");
+      if (!downloads) { setMsg("Downloads are not available in this view. Use Copy text instead."); return; }
+      try { await downloads.save({ filename, data: exportText }); setMsg(`Saved ${filename}.`); }
+      catch (e) { setMsg(e && e.code === "declined" ? "Download cancelled." : "The download did not go through. Use Copy text instead."); }
+      return;
+    }
     try {
       const url = URL.createObjectURL(new Blob([exportText], { type: "application/json" }));
       const a = document.createElement("a");
-      a.href = url; a.download = "valheim-meal-presets.json";
+      a.href = url; a.download = filename;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setMsg("Download started: valheim-meal-presets.json. If nothing arrives, use Copy text instead.");
+      setMsg(`Download started: ${filename}. If nothing arrives, use Copy text instead.`);
     } catch (e) { setMsg("Downloads are blocked here. Use Copy text instead."); }
   };
   const copy = () => {
