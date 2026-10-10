@@ -198,7 +198,7 @@ const STATIONS = {
 };
 const CAULDRON_LV = { Meadows: 1, "Black Forest": 1, Swamps: 2, Mountain: 3, Plains: 4, Mistlands: 5, Ashlands: 6 };
 const CAULDRON_LV_FOOD = { "Cooked egg": 1, "Fiery svinstew": 5, "Spicy marmalade": 5, "Sizzling berry broth": 5 };
-const cauldronLevel = (f) => (f.custom ? null : CAULDRON_LV_FOOD[f.id] ?? CAULDRON_LV[f.biome] ?? null);
+const cauldronLevel = (f) => (f.custom ? (/cauldron/i.test(f.station) ? f.cauldronLv || null : null) : CAULDRON_LV_FOOD[f.id] ?? CAULDRON_LV[f.biome] ?? null);
 const stationParts = (st) => st.split(/\s*(?:\+|→)\s*/);
 
 // Where each raw ingredient comes from. `b` lists biomes, `unsure` marks early Deep North information.
@@ -448,6 +448,7 @@ const planEdits = (got, edits) => Object.keys(got).map((id) => {
 /* ───────── Custom foods and meads: your own additions, saved in this browser ───────── */
 const CUSTOM_KEY = "valheim-planner-custom";
 const FOOD_STATIONS = ["Cooking Station", "Iron Cooking Station", "Cauldron", "Cauldron + Oven", "Oven", "Smoker", "Foraged", "Farmed"];
+const MEAD_STATIONS = ["Mead Ketill → Fermenter", "Cauldron → Fermenter"];
 const MEAD_CATS = ["Healing", "Stamina", "Resistance", "Utility"];
 const cleanIng = (raw) => (Array.isArray(raw) ? raw : [])
   .map((x) => (Array.isArray(x) ? [String(x[0] == null ? "" : x[0]).replace(/\s+/g, " ").trim().slice(0, 30), toNum(x[1])] : null))
@@ -465,18 +466,18 @@ const cleanCustom = (raw) => {
     taken.add(key); make(r, id, BIOMES.includes(r.biome) ? r.biome : "Meadows");
   });
   take(raw && raw.foods, (r, id, biome) => {
-    const hp = toNum(r.hp) || 0, st = toNum(r.st) || 0, eitr = toNum(r.eitr) || 0;
+    const hp = toNum(r.hp) || 0, st = toNum(r.st) || 0, eitr = toNum(r.eitr) || 0, lv = toNum(r.lvl);
     out.foods.push({ id, name: titleCase(id), biome, hp, st, eitr, duration: (toNum(r.min) || 0) * 60, regen: toNum(r.regen) || 0,
-      station: FOOD_STATIONS.includes(r.station) ? r.station : "Cauldron", ing: cleanIng(r.ing), yieldN: 1, type: focusOf(hp, st, eitr), custom: true });
+      station: str(r.station, 40) || "Cauldron", cauldronLv: lv >= 1 && lv <= 6 ? lv : null, ing: cleanIng(r.ing), yieldN: Math.min(99, toNum(r.yieldN) || 1), type: focusOf(hp, st, eitr), custom: true });
   });
   take(raw && raw.meads, (r, id, biome) => {
     out.meads.push({ id, name: titleCase(id), category: MEAD_CATS.includes(r.category) ? r.category : "Utility", biome, effect: str(r.effect, 90) || "Custom effect",
-      duration: toNum(r.duration) || 0, cooldown: toNum(r.cooldown) || 0, ing: cleanIng(r.ing), station: "Mead Ketill → Fermenter", yieldN: 6, custom: true });
+      duration: toNum(r.duration) || 0, cooldown: toNum(r.cooldown) || 0, ing: cleanIng(r.ing), station: str(r.station, 40) || MEAD_STATIONS[0], yieldN: Math.min(99, toNum(r.yieldN) || 6), custom: true });
   });
   return out;
 };
-const packFood = (f) => ({ id: f.id, biome: f.biome, hp: f.hp, st: f.st, eitr: f.eitr, min: Math.round(f.duration / 60), regen: f.regen, station: f.station, ing: f.ing });
-const packMead = (m) => ({ id: m.id, category: m.category, biome: m.biome, effect: m.effect, duration: m.duration, cooldown: m.cooldown, ing: m.ing });
+const packFood = (f) => ({ id: f.id, biome: f.biome, hp: f.hp, st: f.st, eitr: f.eitr, min: Math.round(f.duration / 60), regen: f.regen, station: f.station, lvl: f.cauldronLv, yieldN: f.yieldN, ing: f.ing });
+const packMead = (m) => ({ id: m.id, category: m.category, biome: m.biome, effect: m.effect, duration: m.duration, cooldown: m.cooldown, station: m.station, yieldN: m.yieldN, ing: m.ing });
 const packCustom = (c) => ({ foods: c.foods.map(packFood), meads: c.meads.map(packMead) });
 const loadCustom = () => { try { return cleanCustom(JSON.parse(localStorage.getItem(CUSTOM_KEY) || "{}")); } catch (e) { return cleanCustom(null); } };
 // "Honey 2, Carrot" or "2 Honey" style lists typed into the custom form.
@@ -514,6 +515,9 @@ const UPDATES = [
   { v: 4, date: "10 Oct 2026", items: [
     ["Plates are remembered", "Whatever is on your plates, including empty ones, is still there when you come back or refresh."],
     ["Press a trophy", "Pressing a trophy opens the podium for that focus and biome, listing every food that shares each place."],
+  ] },
+  { v: 5, date: "10 Oct 2026", items: [
+    ["More control over custom items", "Custom foods and meads can now be renamed, given any crafting station (including one you type in), a cauldron level, and how many each craft makes. The biome choice sets their colour, filter and trophies."],
   ] },
 ];
 const LATEST = UPDATES[UPDATES.length - 1].v;
@@ -879,25 +883,29 @@ const CustomFooter = ({ item, onEdit, onDelete }) => {
 const CustomModal = ({ form, onSave, onClose }) => {
   const { kind, item } = form;
   const isFood = kind === "food";
-  const [d, setD] = useState(() => (item
-    ? (isFood
-      ? { name: item.id, biome: item.biome, hp: String(item.hp), st: String(item.st), eitr: String(item.eitr), min: String(Math.round(item.duration / 60)), regen: String(item.regen), station: item.station, ing: ingToText(item.ing) }
-      : { name: item.id, biome: item.biome, category: item.category, effect: item.effect, duration: String(item.duration), cooldown: String(item.cooldown), ing: ingToText(item.ing) })
-    : (isFood
-      ? { name: "", biome: "Meadows", hp: "0", st: "0", eitr: "0", min: "20", regen: "1", station: "Cauldron", ing: "" }
-      : { name: "", biome: "Meadows", category: "Utility", effect: "", duration: "600", cooldown: "600", ing: "" })));
+  const stations = isFood ? FOOD_STATIONS : MEAD_STATIONS;
+  const [d, setD] = useState(() => {
+    const st = item ? item.station : stations[isFood ? 2 : 0];
+    const common = { name: item ? item.id : "", biome: item ? item.biome : "Meadows", stationSel: stations.includes(st) ? st : "Other", stationOther: stations.includes(st) ? "" : st,
+      yieldN: String(item ? item.yieldN : isFood ? 1 : 6), ing: item ? ingToText(item.ing) : "" };
+    return isFood
+      ? { ...common, hp: String(item ? item.hp : 0), st: String(item ? item.st : 0), eitr: String(item ? item.eitr : 0), min: String(item ? Math.round(item.duration / 60) : 20), regen: String(item ? item.regen : 1), lvl: item && item.cauldronLv ? String(item.cauldronLv) : "" }
+      : { ...common, category: item ? item.category : "Utility", effect: item ? item.effect : "", duration: String(item ? item.duration : 600), cooldown: String(item ? item.cooldown : 600) };
+  });
   const [err, setErr] = useState("");
   const set = (k) => (e) => setD({ ...d, [k]: e.target.value });
+  const station = d.stationSel === "Other" ? d.stationOther : d.stationSel;
   const submit = (e) => {
     e.preventDefault();
-    const problem = onSave(kind, { ...d, id: d.name, ing: parseIngText(d.ing) }, item ? item.id : null);
+    const problem = onSave(kind, { ...d, id: d.name, station, ing: parseIngText(d.ing) }, item ? item.id : null);
     if (problem) setErr(problem); else onClose();
   };
   const lab = "flex min-w-0 flex-col gap-0.5 text-xs font-bold text-stone-300";
-  const inp = "w-full rounded-sm border border-stone-600 bg-stone-950 px-2 py-1.5 text-sm font-normal text-stone-100 placeholder:text-stone-600 disabled:opacity-60";
-  const numField = (k, label) => (
+  const inp = "w-full rounded-sm border border-stone-600 bg-stone-950 px-2 py-1.5 text-sm font-normal text-stone-100 placeholder:text-stone-600";
+  const group = "text-xs font-bold uppercase tracking-wider text-amber-400";
+  const numField = (k, label, min = 0) => (
     <label key={k} htmlFor={`c-${k}`} className={lab}>{label}
-      <input id={`c-${k}`} type="number" inputMode="numeric" min="0" max="9999" step="1" required value={d[k]} onChange={set(k)} className={`num ${inp}`} />
+      <input id={`c-${k}`} type="number" inputMode="numeric" min={min} max="9999" step="1" required value={d[k]} onChange={set(k)} className={`num ${inp}`} />
     </label>
   );
   return (
@@ -906,34 +914,54 @@ const CustomModal = ({ form, onSave, onClose }) => {
       <p className="mt-2 flex items-start gap-2 text-sm text-pink-100"><CustomTag /><span>Saved on this device only and always marked as custom.</span></p>
       <form onSubmit={submit} className="mt-3 flex flex-col gap-2.5">
         <label htmlFor="c-name" className={lab}>Name
-          <input id="c-name" type="text" required maxLength={40} disabled={!!item} value={d.name} onChange={set("name")} placeholder={isFood ? "e.g. Troll Stew" : "e.g. Swamp Tonic"} className={inp} />
+          <input id="c-name" type="text" required maxLength={40} value={d.name} onChange={set("name")} placeholder={isFood ? "e.g. Troll Stew" : "e.g. Swamp Tonic"} className={inp} />
         </label>
-        <div className="grid grid-cols-2 gap-2">
-          <label htmlFor="c-biome" className={lab}>Biome
-            <select id="c-biome" value={d.biome} onChange={set("biome")} className={inp}>{BIOMES.map((b) => <option key={b} value={b}>{b}</option>)}</select>
-          </label>
-          {isFood ? (
-            <label htmlFor="c-station" className={lab}>Made at
-              <select id="c-station" value={d.station} onChange={set("station")} className={inp}>{FOOD_STATIONS.map((x) => <option key={x} value={x}>{x}</option>)}</select>
-            </label>
-          ) : (
-            <label htmlFor="c-category" className={lab}>Category
-              <select id="c-category" value={d.category} onChange={set("category")} className={inp}>{MEAD_CATS.map((x) => <option key={x} value={x}>{x}</option>)}</select>
-            </label>
-          )}
-        </div>
+        <label htmlFor="c-biome" className={lab}>Biome it belongs to
+          <select id="c-biome" value={d.biome} onChange={set("biome")} className={inp}>{BIOMES.map((b) => <option key={b} value={b}>{b}</option>)}</select>
+          <span className="font-normal text-stone-500">Sets its colour, where it appears in the biome filter, and which trophies it competes for.</span>
+        </label>
+
+        <p className={`mt-1 ${group}`}>{isFood ? "What it gives" : "What it does"}</p>
         {isFood ? (
           <div className="grid grid-cols-3 gap-2">
             {numField("hp", "Health")}{numField("st", "Stamina")}{numField("eitr", "Eitr")}{numField("min", "Lasts (min)")}{numField("regen", "Regen / tick")}
           </div>
         ) : (
           <>
+            <div className="grid grid-cols-2 gap-2">
+              <label htmlFor="c-category" className={lab}>Category
+                <select id="c-category" value={d.category} onChange={set("category")} className={inp}>{MEAD_CATS.map((x) => <option key={x} value={x}>{x}</option>)}</select>
+              </label>
+            </div>
             <label htmlFor="c-effect" className={lab}>Effect
               <input id="c-effect" type="text" required maxLength={90} value={d.effect} onChange={set("effect")} placeholder="e.g. Restores 100 health over 10s" className={inp} />
             </label>
             <div className="grid grid-cols-2 gap-2">{numField("duration", "Lasts (sec)")}{numField("cooldown", "Cooldown (sec)")}</div>
           </>
         )}
+
+        <p className={`mt-1 ${group}`}>What it takes to make</p>
+        <div className="grid grid-cols-2 gap-2">
+          <label htmlFor="c-station" className={lab}>{isFood ? "Crafting station" : "Made at"}
+            <select id="c-station" value={d.stationSel} onChange={set("stationSel")} className={inp}>
+              {stations.map((x) => <option key={x} value={x}>{x}</option>)}
+              <option value="Other">Other (type your own)</option>
+            </select>
+          </label>
+          {d.stationSel === "Other" ? (
+            <label htmlFor="c-station-other" className={lab}>Station name
+              <input id="c-station-other" type="text" required maxLength={40} value={d.stationOther} onChange={set("stationOther")} placeholder="e.g. Food Preparation Table" className={inp} />
+            </label>
+          ) : isFood && /cauldron/i.test(d.stationSel) ? (
+            <label htmlFor="c-lvl" className={lab}>Cauldron level needed
+              <select id="c-lvl" value={d.lvl} onChange={set("lvl")} className={inp}>
+                <option value="">Not set</option>
+                {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>Level {n}</option>)}
+              </select>
+            </label>
+          ) : <span />}
+          {numField("yieldN", isFood ? "Makes per craft" : "Meads per base", 1)}
+        </div>
         <label htmlFor="c-ing" className={lab}>Ingredients
           <input id="c-ing" type="text" value={d.ing} onChange={set("ing")} placeholder="e.g. Honey 2, Carrot 1" className={inp} />
           <span className="font-normal text-stone-500">Separate with commas. Put the amount after each name. Leave empty if there is no recipe.</span>
@@ -1029,7 +1057,7 @@ const MeadCard = ({ m, onStation, onIngredient, onSaveEdit, onEditCustom, onDele
           </p>
           <StationChips station={m.station} onOpen={onStation} />
           <div className="mt-auto flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-stretch">
-            <Step Icon={Flame} title="Mead base (Mead Ketill)"><Ingredients ing={m.ing} onPick={onIngredient} /></Step>
+            <Step Icon={Flame} title={`Mead base (${stationParts(m.station)[0]})`}><Ingredients ing={m.ing} onPick={onIngredient} /></Step>
             <Arrow size={16} className="hidden shrink-0 self-center text-amber-600 sm:block" aria-hidden="true" />
             <Step Icon={Hourglass} title="Ferment"><p className="text-sm text-stone-300">2 in-game days in a Fermenter, about 1 hour of play.</p></Step>
             <Arrow size={16} className="hidden shrink-0 self-center text-amber-600 sm:block" aria-hidden="true" />
@@ -1350,10 +1378,18 @@ function App() {
     const key = kind === "food" ? "foods" : "meads";
     const packed = packCustom(custom);
     const at = packed[key].findIndex((x) => x.id === editingId);
-    if (at >= 0) packed[key][at] = { ...raw, id: editingId }; else packed[key].push(raw);
+    if (at >= 0) packed[key][at] = raw; else packed[key].push(raw);
     const next = cleanCustom(packed);
     if (next[key].length !== packed[key].length) return "That name is empty or already used by another food or mead. Pick a different name.";
-    setCustom(next); return null;
+    setCustom(next);
+    // A renamed food keeps its place on plates and in saved presets.
+    const newId = at >= 0 ? next[key][at].id : null;
+    if (kind === "food" && newId && newId !== editingId) {
+      const swap = (id) => (id === editingId ? newId : id);
+      setSlots((sl) => sl.map(swap));
+      setSaved((list) => list.map((p) => ({ name: p.name, foods: p.foods.map(swap) })));
+    }
+    return null;
   };
   const dropFoods = (gone) => {
     setSlots((sl) => sl.filter((id) => !gone.has(id)));
