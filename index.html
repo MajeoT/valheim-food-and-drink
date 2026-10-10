@@ -52,7 +52,7 @@ const Heart = icon("Heart"), Zap = icon("Zap"), Sparkles = icon("Sparkles"), Sea
   Utensils = icon("Utensils"), Basket = icon("ShoppingBasket"), Chevron = icon("ChevronDown"),
   Shield = icon("Shield"), Compass = icon("Compass"), Wand = icon("Wand2"), Scale = icon("Scale"),
   Arrow = icon("ArrowRight"), Beer = icon("Beer"), Trash = icon("Trash2"), Hourglass = icon("Hourglass"),
-  Activity = icon("Activity"), Timer = icon("Timer"), Trophy = icon("Trophy"), Save = icon("Save"), Copy = icon("Copy"), Share = icon("Share2"), Flame = icon("Flame"), Info = icon("Info"), Hammer = icon("Hammer");
+  Activity = icon("Activity"), Timer = icon("Timer"), Trophy = icon("Trophy"), Save = icon("Save"), Copy = icon("Copy"), Share = icon("Share2"), Flame = icon("Flame"), Info = icon("Info"), Hammer = icon("Hammer"), Pencil = icon("Pencil"), Undo = icon("RotateCcw"), MapPin = icon("MapPin"), Megaphone = icon("Megaphone");
 
 /* ───────── Data ───────── */
 const BIOMES = ["Meadows", "Black Forest", "Swamps", "Mountain", "Plains", "Mistlands", "Ashlands", "Deep North"];
@@ -62,9 +62,10 @@ const BIOME_HEX = { Meadows: "#a3e635", "Black Forest": "#22a06b", Swamps: "#b08
 const biomeCardStyle = (b) => ({ borderLeft: `5px solid ${BIOME_HEX[b]}`, boxShadow: `inset 0 34px 26px -26px ${BIOME_HEX[b]}40, 0 10px 15px -3px rgba(0,0,0,.3)` });
 const BASE = { hp: 25, st: 50, eitr: 0 };
 
+const focusOf = (hp, st, eitr) => (eitr > hp && eitr > st ? "Eitr" : hp === st ? "Balanced" : hp > st ? "Health" : "Stamina");
 // [name, biome, hp, stamina, eitr, minutes, regen/tick, station, ingredients, yield]
 const F = (name, biome, hp, st, eitr, min, regen, station, ing = [], yieldN = 1) => {
-  const type = eitr > hp && eitr > st ? "Eitr" : hp === st ? "Balanced" : hp > st ? "Health" : "Stamina";
+  const type = focusOf(hp, st, eitr);
   return { id: name, name, biome, hp, st, eitr, duration: min * 60, regen, station, ing, yieldN, type };
 };
 const FOODS = [
@@ -200,6 +201,67 @@ const CAULDRON_LV_FOOD = { "Cooked egg": 1, "Fiery svinstew": 5, "Spicy marmalad
 const cauldronLevel = (f) => CAULDRON_LV_FOOD[f.name] ?? CAULDRON_LV[f.biome] ?? null;
 const stationParts = (st) => st.split(/\s*(?:\+|→)\s*/);
 
+// Where each raw ingredient comes from. `b` lists biomes, `unsure` marks early Deep North information.
+const SOURCES = {
+  "Neck tail": { b: ["Meadows"], how: "Dropped by Necks, the small lizards that live along Meadows shorelines." },
+  "Boar meat": { b: ["Meadows"], how: "Dropped by Boars. Tame a pair with mushrooms or berries to breed a steady supply." },
+  "Deer meat": { b: ["Meadows", "Black Forest"], how: "Dropped by Deer. They bolt when they hear you, so sneak up or use a bow." },
+  "Raw fish": { b: ["Meadows"], how: "Caught with a fishing rod and bait, both sold by Haldor the trader. Any water will do." },
+  Honey: { b: ["Meadows"], how: "Collected from Beehives you build. Each hive needs a Queen bee, found in wild hives in abandoned Meadows houses." },
+  Raspberries: { b: ["Meadows"], how: "Picked from raspberry bushes. They regrow every few in-game days." },
+  Blueberries: { b: ["Black Forest"], how: "Picked from low blueberry bushes on the forest floor." },
+  Mushroom: { b: ["Meadows", "Black Forest", "Swamps"], how: "Red mushrooms picked from the ground, mostly in shaded woodland." },
+  "Yellow mushroom": { b: ["Black Forest", "Swamps"], how: "Glowing yellow mushrooms found inside Burial Chambers, Troll Caves and Sunken Crypts." },
+  Dandelion: { b: ["Meadows"], how: "Picked from the small yellow flowers scattered across open Meadows grass." },
+  Thistle: { b: ["Black Forest", "Swamps"], how: "Picked from spiky plants with a blue glow. Easiest to spot at night." },
+  Carrot: { b: ["Black Forest"], how: "Carrot seeds come from white-flowered plants in the Black Forest. Plant them with a Cultivator, then replant a few carrots for more seeds." },
+  "Cooked deer meat": { b: ["Meadows"], how: "Deer meat cooked on a Cooking Station." },
+  "Greydwarf eye": { b: ["Black Forest"], how: "Dropped by Greydwarfs of every kind." },
+  Coal: { b: ["Black Forest"], how: "Made by burning wood in a Charcoal kiln. Also dropped by Surtlings and found in chests." },
+  Ooze: { b: ["Swamps"], how: "Dropped by Blobs and Oozers." },
+  Turnip: { b: ["Swamps"], how: "Turnip seeds come from yellow-flowered plants in the Swamp. Plant them with a Cultivator." },
+  Bloodbag: { b: ["Swamps"], how: "Dropped by Leeches in Swamp water." },
+  Entrails: { b: ["Swamps"], how: "Dropped by Draugr, in the Swamp and in Draugr-infested Meadows villages." },
+  "Serpent meat": { b: ["Ocean"], how: "Dropped by Sea Serpents, which surface in the open Ocean at night or in storms. Drag one to shore with a harpoon so the meat is not lost." },
+  "Cooked serpent meat": { b: ["Ocean"], how: "Serpent meat cooked on an Iron Cooking Station." },
+  Onion: { b: ["Mountain"], how: "Onion seeds are found in chests inside abandoned Mountain buildings. Plant them with a Cultivator." },
+  "Freeze gland": { b: ["Mountain"], how: "Dropped by Drakes." },
+  "Wolf meat": { b: ["Mountain"], how: "Dropped by Wolves. Tamed wolves breed and can be farmed for it." },
+  Cloudberries: { b: ["Plains"], how: "Picked from low orange-berried plants across the Plains." },
+  "Lox meat": { b: ["Plains"], how: "Dropped by Lox. Tame them with cloudberries or barley to breed them." },
+  Barley: { b: ["Plains"], how: "Taken from Fuling village fields and chests. It only grows when planted in the Plains." },
+  "Barley flour": { b: ["Plains"], how: "Barley ground in a Windmill." },
+  "Cooked fish": { b: ["Meadows"], how: "Raw fish cooked on a Cooking Station." },
+  "Bread dough": { b: ["Plains"], how: "Made in the Cauldron from 10 Barley flour, which gives 2 dough." },
+  Egg: { b: ["Mistlands"], how: "The first egg is bought from Haldor once Yagluth is defeated. Hatch it near warmth and your hens lay more." },
+  "Chicken meat": { b: ["Mistlands"], how: "Dropped by grown Hens, raised from eggs." },
+  "Hare meat": { b: ["Mistlands"], how: "Dropped by Hares, which are fast and skittish." },
+  "Seeker meat": { b: ["Mistlands"], how: "Dropped by Seekers and Seeker Soldiers." },
+  "Jotun puffs": { b: ["Mistlands"], how: "Picked from the ground. Can be replanted with a Cultivator, but only in the Mistlands." },
+  Magecap: { b: ["Mistlands"], how: "Glowing blue mushrooms picked from the ground. Can be replanted with a Cultivator, but only in the Mistlands." },
+  Anglerfish: { b: ["Mistlands"], how: "Fished from Mistlands waters using Misty fishing bait." },
+  "Blood clot": { b: ["Mistlands"], how: "Dropped by Ticks." },
+  Sap: { b: ["Mistlands"], how: "Collected by a Sap extractor placed on a glowing Yggdrasil root." },
+  "Royal jelly": { b: ["Mistlands"], how: "Scooped from the floors of Infested Mines and the Seeker Queen's lair." },
+  "Asksvin tail": { b: ["Ashlands"], how: "Dropped by Asksvin." },
+  "Volture meat": { b: ["Ashlands"], how: "Dropped by Voltures." },
+  "Volture egg": { b: ["Ashlands"], how: "Taken from Volture nests on rock spires and ruins." },
+  "Bonemaw meat": { b: ["Ashlands"], how: "Dropped by the Bonemaw serpent in the seas around the Ashlands." },
+  "Vineberry cluster": { b: ["Ashlands"], how: "Picked from vines on Ashlands ruins. Vineberry seeds can be planted against walls to grow your own." },
+  "Smoke puff": { b: ["Ashlands"], how: "Picked from the ground." },
+  "Fiddlehead fern": { b: ["Ashlands"], how: "Picked from curled ferns on the ground." },
+  "Seal blubber": { b: ["Deep North"], how: "Dropped by Seals.", unsure: true },
+  "Moose meat": { b: ["Deep North"], how: "Dropped by Moose.", unsure: true },
+  Kale: { b: ["Deep North"], how: "A Deep North crop, gathered wild or grown with a Cultivator.", unsure: true },
+  Oats: { b: ["Deep North"], how: "A Deep North grain, gathered wild or grown with a Cultivator.", unsure: true },
+  Poteitr: { b: ["Deep North"], how: "A Deep North root crop, gathered wild or grown with a Cultivator.", unsure: true },
+  Lingonberries: { b: ["Deep North"], how: "Picked from lingonberry bushes.", unsure: true },
+  Ice: { b: ["Deep North"], how: "Gathered in the Deep North.", unsure: true },
+  "Oat flour": { b: ["Deep North"], how: "Oats ground in a Windmill.", unsure: true },
+  "Raw kale chips": { b: ["Deep North"], how: "Prepared from Kale in the Cauldron, then baked.", unsure: true },
+  "Oat milk": { b: ["Deep North"], how: "Made in the Cauldron from Oats and Ice." },
+};
+
 /* ───────── Helpers ───────── */
 const fmtDur = (s) => (s >= 60 ? `${Math.round(s / 60)}m` : `${s}s`);
 const fuzzyOne = (q, t) => {
@@ -215,8 +277,8 @@ const fuzzy = (q, item) => {
   return fuzzyOne(q, item.name.replace(/\s+/g, "")) || item.ing.some(([n]) => fuzzyOne(q, n.replace(/\s+/g, "")));
 };
 // Best foods available up to a biome tier. Falls back to stamina when no eitr food exists yet.
-const buildPreset = (pick, tier) => {
-  const pool = FOODS.filter((f) => BIOMES.indexOf(f.biome) <= tier);
+const buildPreset = (pick, tier, list = FOODS) => {
+  const pool = list.filter((f) => BIOMES.indexOf(f.biome) <= tier);
   const chosen = [];
   pick.forEach((stat) => {
     let cands = pool.filter((f) => !chosen.includes(f.id));
@@ -252,6 +314,85 @@ const textToPresets = (raw) => {
 };
 const loadSaved = () => { try { return cleanPresets(JSON.parse(localStorage.getItem(LS_KEY) || "[]")); } catch (e) { return []; } };
 
+/* ───────── Corrections: your own figures, saved in this browser ───────── */
+const EDIT_KEY = "valheim-planner-edits";
+const EDIT_HEAD = "Valheim planner corrections";
+const EDIT_LABEL = { hp: "health", st: "stamina", eitr: "eitr", min: "minutes", regen: "regen", duration: "lasts", cooldown: "cooldown" };
+const ITEM_BY_NORM = new Map([...FOODS.map((f) => [normName(f.name), { item: f, isFood: true }]), ...MEADS.map((m) => [normName(m.name), { item: m, isFood: false }])]);
+const toNum = (v) => { if (v == null || String(v).trim() === "") return null; const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(9999, Math.max(0, n)) : null; };
+const baseVal = (item, k) => (k === "min" ? Math.round(item.duration / 60) : item[k]);
+// Keeps only real items, valid numbers and values that differ from the defaults.
+const cleanEdits = (raw) => {
+  const out = {};
+  if (!raw || typeof raw !== "object") return out;
+  Object.keys(raw).forEach((key) => {
+    const hit = ITEM_BY_NORM.get(normName(key));
+    const e = raw[key];
+    if (!hit || !e || typeof e !== "object") return;
+    const { item, isFood } = hit;
+    const o = {};
+    (isFood ? ["hp", "st", "eitr", "min", "regen"] : ["duration", "cooldown"]).forEach((k) => {
+      const n = toNum(e[k]);
+      if (n != null && n !== baseVal(item, k)) o[k] = n;
+    });
+    if (e.ing && typeof e.ing === "object") {
+      const ing = {};
+      item.ing.forEach(([n, q]) => { const v = toNum(e.ing[n] != null ? e.ing[n] : e.ing[normName(n)]); if (v != null && v !== q) ing[n] = v; });
+      if (Object.keys(ing).length) o.ing = ing;
+    }
+    if (Object.keys(o).length) out[item.id] = o;
+  });
+  return out;
+};
+const withEdits = (item, e, isFood) => {
+  if (!e) return item;
+  const o = { ...item, edited: true };
+  if (isFood) {
+    ["hp", "st", "eitr", "regen"].forEach((k) => { if (e[k] != null) o[k] = e[k]; });
+    if (e.min != null) o.duration = e.min * 60;
+    o.type = focusOf(o.hp, o.st, o.eitr);
+  } else {
+    ["duration", "cooldown"].forEach((k) => { if (e[k] != null) o[k] = e[k]; });
+  }
+  if (e.ing) o.ing = item.ing.map(([n, q]) => [n, e.ing[n] != null ? e.ing[n] : q]);
+  return o;
+};
+// One item per line: "Bread | health 25 | stamina 72 | Barley flour 8".
+const editsToText = (edits) => [EDIT_HEAD, ...Object.keys(edits).map((id) => {
+  const e = edits[id];
+  return [id, ...Object.keys(EDIT_LABEL).filter((k) => e[k] != null).map((k) => `${EDIT_LABEL[k]} ${e[k]}`), ...Object.keys(e.ing || {}).map((n) => `${n} ${e.ing[n]}`)].join(" | ");
+})].join("\n");
+const textToEdits = (raw) => {
+  const out = {};
+  raw.split(/\r?\n/).forEach((line) => {
+    const parts = line.replace(/^[\s>•]+/, "").split("|").map((x) => x.trim());
+    if (parts.length < 2) return;
+    const e = { ing: {} };
+    parts.slice(1).forEach((part) => {
+      const m = part.match(/^(.*\S)\s+(\d+)$/);
+      if (!m) return;
+      const key = Object.keys(EDIT_LABEL).find((k) => EDIT_LABEL[k] === normName(m[1]));
+      if (key) e[key] = m[2]; else e.ing[normName(m[1])] = m[2];
+    });
+    out[parts[0]] = e;
+  });
+  return cleanEdits(out);
+};
+const loadEdits = () => { try { return cleanEdits(JSON.parse(localStorage.getItem(EDIT_KEY) || "{}")); } catch (e) { return {}; } };
+const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+/* ───────── What's new ───────── */
+const NEWS_ID = "2026-10-10-corrections";
+const NEWS_KEY = "valheim-planner-news-seen";
+const NEWS = [
+  ["Fix any number yourself", "Press Edit figures on a food or mead card to change its stats, times or ingredient amounts. Your changes stay in this browser."],
+  ["Share your corrections", "Open Corrections above the cards to copy or share your changes as text, add a friend's, or reset one biome or everything."],
+  ["Swap into a full plate", "When all three plates are full, each food shows 1, 2 and 3 buttons to replace that plate."],
+  ["See where ingredients come from", "Tap any ingredient name to see which creature, plant or station gives it."],
+  ["Trophies are now per biome", "Gold, silver and bronze mark the top three foods for each focus within their own biome."],
+];
+const newsSeen = () => { try { return localStorage.getItem(NEWS_KEY) === NEWS_ID; } catch (e) { return false; } };
+
 /* ───────── Focus forks and trophies ───────── */
 const FOCUS_HEX = { Health: "#f87171", Stamina: "#fde047", Balanced: "#f5f5f4", Eitr: "#c084fc" };
 const Fork = ({ type, size = 14 }) => (
@@ -264,7 +405,8 @@ const FocusTag = ({ type }) => (
   <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider" style={{ color: FOCUS_HEX[type] }}><Fork type={type} size={13} />{type}</span>
 );
 const RANK_KEY = { Health: "hp", Stamina: "st", Eitr: "eitr", Balanced: "hp" };
-const RANK = [null, { hex: "#fbbf24", label: "1st", word: "Highest" }, { hex: "#cbd5e1", label: "2nd", word: "2nd highest" }, { hex: "#cd7f47", label: "3rd", word: "3rd highest" }];
+const RANK = [null, { hex: "#fbbf24", edge: "#92400e", label: "1st", word: "Highest" }, { hex: "#cbd5e1", edge: "#475569", label: "2nd", word: "2nd highest" }, { hex: "#cd7f47", edge: "#6b2f12", label: "3rd", word: "3rd highest" }];
+const TrophyIcon = ({ rank, size = 16 }) => <Trophy size={size} fill={RANK[rank].hex} stroke={RANK[rank].edge} strokeWidth={1.6} aria-hidden="true" />;
 // Top three values per focus within a list; foods that tie share a trophy.
 const rankFoods = (list) => {
   const out = {};
@@ -282,18 +424,21 @@ const TrophyTag = ({ rank, type, scope }) => {
   const tip = `${r.word} ${what} ${scope}`;
   return (
     <span className="num inline-flex items-center gap-0.5 text-xs font-bold" style={{ color: r.hex }} title={tip}>
-      <Trophy size={13} aria-hidden="true" />{r.label}<span className="sr-only"> {tip}</span>
+      <TrophyIcon rank={rank} />{r.label}<span className="sr-only"> {tip}</span>
     </span>
   );
 };
 
 /* ───────── Small pieces ───────── */
-const BiomeTag = ({ biome }) => (
-  <span className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider"
-    style={{ color: BIOME_HEX[biome], backgroundColor: BIOME_HEX[biome] + "26", border: `1px solid ${BIOME_HEX[biome]}80` }}>
-    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: BIOME_HEX[biome] }} aria-hidden="true" />{biome}
-  </span>
-);
+const BiomeTag = ({ biome }) => {
+  const c = BIOME_HEX[biome] || "#7dd3fc";
+  return (
+    <span className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider"
+      style={{ color: c, backgroundColor: c + "26", border: `1px solid ${c}80` }}>
+      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c }} aria-hidden="true" />{biome}
+    </span>
+  );
+};
 const STAT = {
   hp: { label: "Health", Icon: Heart, text: "text-red-400", bg: "bg-red-500", chip: "bg-red-950/70 text-red-300 border-red-800/70", max: 400 },
   st: { label: "Stamina", Icon: Zap, text: "text-yellow-300", bg: "bg-yellow-400", chip: "bg-yellow-950/60 text-yellow-200 border-yellow-700/60", max: 400 },
@@ -313,9 +458,10 @@ const Pill = ({ active, onClick, children }) => (
     {children}
   </button>
 );
-const Ingredients = ({ ing }) => ing.length ? (
+const ingBtn = "text-left underline decoration-stone-500 decoration-dotted underline-offset-2 transition-colors hover:text-amber-300 hover:decoration-amber-400";
+const Ingredients = ({ ing, onPick }) => ing.length ? (
   <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-stone-300">
-    {ing.map(([n, q]) => <li key={n}><span className="num font-bold text-amber-400">{q}×</span> {n}</li>)}
+    {ing.map(([n, q]) => <li key={n}><span className="num font-bold text-amber-400">{q}×</span> {onPick ? <button type="button" onClick={() => onPick(n)} title={`Where to get ${n}`} className={ingBtn}>{n}</button> : n}</li>)}
   </ul>
 ) : <p className="text-sm italic text-stone-500">No recipe. Gather it in the wild.</p>;
 
@@ -360,8 +506,7 @@ const CostList = ({ cost }) => (
     {cost.map(([n, q]) => <li key={n}><span className="num font-bold text-amber-400">{q}×</span> {n}</li>)}
   </ul>
 );
-const StationModal = ({ open, onClose }) => {
-  const st = STATIONS[open.name];
+const Modal = ({ labelId, onClose, children }) => {
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -370,73 +515,186 @@ const StationModal = ({ open, onClose }) => {
   return (
     <motion.div className="fixed inset-0 z-40 flex items-end justify-center bg-black/75 p-4 sm:items-center" onClick={onClose}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-      <motion.div role="dialog" aria-modal="true" aria-labelledby="station-h" onClick={(e) => e.stopPropagation()}
+      <motion.div role="dialog" aria-modal="true" aria-labelledby={labelId} onClick={(e) => e.stopPropagation()}
         initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 24, opacity: 0 }} transition={{ duration: 0.18 }}
         className="wood max-h-[85vh] w-full max-w-md overflow-y-auto rounded-sm p-4 shadow-2xl shadow-black">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-amber-500">How to build</p>
-            <h2 id="station-h" className="display text-3xl leading-tight text-stone-100">{st.title}</h2>
-          </div>
-          <button onClick={onClose} autoFocus className="flex shrink-0 items-center gap-1 rounded-sm border border-stone-600 px-2 py-1 text-sm font-bold text-stone-200 hover:border-amber-500 hover:text-amber-300"><X size={14} aria-hidden="true" />Close</button>
-        </div>
-        {st.levels ? (
-          <div className="mt-3">
-            {open.level && <p className="mb-2 rounded-sm border border-amber-700 bg-amber-950/50 px-2 py-1 text-amber-100">This recipe needs a <strong>level {open.level}</strong> cauldron, so build every piece up to and including level {open.level}.</p>}
-            <ol className="flex flex-col gap-1.5">
-              {st.levels.map(([lv, name, cost]) => (
-                <li key={lv} className={`rounded-sm border px-2 py-1.5 ${open.level && lv <= open.level ? "border-amber-700/80 bg-stone-950/50" : "border-stone-700/70 opacity-60"}`}>
-                  <p className="font-bold text-stone-100"><span className="num text-amber-400">Lv {lv}</span> · {name}</p>
-                  {cost ? <CostList cost={cost} /> : <p className="text-sm italic text-stone-400">Materials not confirmed here. Check the build menu.</p>}
-                </li>
-              ))}
-            </ol>
-          </div>
-        ) : (
-          <div className="mt-3">
-            <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-stone-400">Materials</h3>
-            <CostList cost={st.cost} />
-          </div>
-        )}
-        <dl className="mt-3 flex flex-col gap-1.5 border-t border-stone-700 pt-3 text-stone-300">
-          <div><dt className="text-xs font-bold uppercase tracking-wider text-stone-400">Placement</dt><dd>{st.near}</dd></div>
-          {st.fire && <div><dt className="text-xs font-bold uppercase tracking-wider text-stone-400">Heat</dt><dd>{st.fire}</dd></div>}
-        </dl>
-        <p className="mt-3 text-sm text-stone-400">{st.note}</p>
+        {children}
       </motion.div>
     </motion.div>
   );
 };
+const ModalHead = ({ id, eyebrow, title, onClose, closeLabel = "Close" }) => (
+  <div className="flex items-start justify-between gap-3">
+    <div className="min-w-0">
+      <p className="text-xs font-bold uppercase tracking-widest text-amber-500">{eyebrow}</p>
+      <h2 id={id} className="display break-words text-3xl leading-tight text-stone-100">{title}</h2>
+    </div>
+    <button onClick={onClose} autoFocus className="flex shrink-0 items-center gap-1 rounded-sm border border-stone-600 px-2 py-1 text-sm font-bold text-stone-200 hover:border-amber-500 hover:text-amber-300"><X size={14} aria-hidden="true" />{closeLabel}</button>
+  </div>
+);
+const StationModal = ({ open, onClose }) => {
+  const st = STATIONS[open.name];
+  return (
+    <Modal labelId="station-h" onClose={onClose}>
+      <ModalHead id="station-h" eyebrow="How to build" title={st.title} onClose={onClose} />
+      {st.levels ? (
+        <div className="mt-3">
+          {open.level && <p className="mb-2 rounded-sm border border-amber-700 bg-amber-950/50 px-2 py-1 text-amber-100">This recipe needs a <strong>level {open.level}</strong> cauldron, so build every piece up to and including level {open.level}.</p>}
+          <ol className="flex flex-col gap-1.5">
+            {st.levels.map(([lv, name, cost]) => (
+              <li key={lv} className={`rounded-sm border px-2 py-1.5 ${open.level && lv <= open.level ? "border-amber-700/80 bg-stone-950/50" : "border-stone-700/70 opacity-60"}`}>
+                <p className="font-bold text-stone-100"><span className="num text-amber-400">Lv {lv}</span> · {name}</p>
+                {cost ? <CostList cost={cost} /> : <p className="text-sm italic text-stone-400">Materials not confirmed here. Check the build menu.</p>}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : (
+        <div className="mt-3">
+          <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-stone-400">Materials</h3>
+          <CostList cost={st.cost} />
+        </div>
+      )}
+      <dl className="mt-3 flex flex-col gap-1.5 border-t border-stone-700 pt-3 text-stone-300">
+        <div><dt className="text-xs font-bold uppercase tracking-wider text-stone-400">Placement</dt><dd>{st.near}</dd></div>
+        {st.fire && <div><dt className="text-xs font-bold uppercase tracking-wider text-stone-400">Heat</dt><dd>{st.fire}</dd></div>}
+      </dl>
+      <p className="mt-3 text-sm text-stone-400">{st.note}</p>
+    </Modal>
+  );
+};
+const IngredientModal = ({ name, foods, onPick, onClose }) => {
+  const src = SOURCES[name];
+  const food = foods.find((f) => f.name === name);
+  return (
+    <Modal labelId="ing-h" onClose={onClose}>
+      <ModalHead id="ing-h" eyebrow="Where to get it" title={name} onClose={onClose} />
+      {src ? (
+        <div className="mt-3 flex flex-col gap-2">
+          <p className="flex flex-wrap items-center gap-1.5"><MapPin size={14} className="text-stone-400" aria-hidden="true" />{src.b.map((b) => <BiomeTag key={b} biome={b} />)}</p>
+          <p className="text-stone-200">{src.how}</p>
+          {src.unsure && <p className="text-sm italic text-stone-400">Not confirmed. This comes from early Deep North guides, so check it in game.</p>}
+        </div>
+      ) : <p className="mt-3 text-stone-300">No source recorded for this one yet.</p>}
+      {food && food.ing.length > 0 && (
+        <div className="mt-3 border-t border-stone-700 pt-3">
+          <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-stone-400">Made from, at the {food.station}</h3>
+          <Ingredients ing={food.ing} onPick={onPick} />
+        </div>
+      )}
+      {food && <p className="mt-3 text-sm text-stone-400">Also a food by itself: {food.hp} health, {food.st} stamina{food.eitr ? `, ${food.eitr} eitr` : ""}.</p>}
+    </Modal>
+  );
+};
+const NewsModal = ({ onClose }) => (
+  <Modal labelId="news-h" onClose={onClose}>
+    <ModalHead id="news-h" eyebrow="Latest update" title="What's new" onClose={onClose} closeLabel="Dismiss" />
+    <ul className="mt-3 flex flex-col gap-2.5">
+      {NEWS.map(([t, d]) => <li key={t}><p className="font-bold text-amber-200">{t}</p><p className="text-sm text-stone-300">{d}</p></li>)}
+    </ul>
+    <button onClick={onClose} className="mt-4 w-full rounded-sm border border-amber-600 bg-amber-500 px-3 py-2 font-bold text-stone-950 hover:bg-amber-400">Got it</button>
+    <p className="mt-2 text-center text-xs text-stone-500">This will not show again until the next update.</p>
+  </Modal>
+);
+
+const FOOD_FIELDS = [["hp", "Health", (f) => f.hp], ["st", "Stamina", (f) => f.st], ["eitr", "Eitr", (f) => f.eitr], ["min", "Lasts (min)", (f) => Math.round(f.duration / 60)], ["regen", "Regen / tick", (f) => f.regen]];
+const MEAD_FIELDS = [["duration", "Lasts (sec)", (m) => m.duration], ["cooldown", "Cooldown (sec)", (m) => m.cooldown]];
+const EditForm = ({ item, fields, onSave, onCancel, onReset }) => {
+  const [d, setD] = useState(() => {
+    const o = { ing: {} };
+    fields.forEach(([k, , get]) => { o[k] = String(get(item)); });
+    item.ing.forEach(([n, q]) => { o.ing[n] = String(q); });
+    return o;
+  });
+  const base = "e-" + slug(item.id);
+  const inputCls = "num w-full rounded-sm border border-stone-600 bg-stone-950 px-1.5 py-1 text-sm text-stone-100";
+  const small = "rounded-sm border px-2 py-1 text-xs font-bold transition-colors";
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onSave(d); }} className="flex flex-col gap-2 rounded-sm border border-amber-700/70 bg-stone-950/60 p-2">
+      <p className="text-xs font-bold uppercase tracking-wider text-amber-400">Edit figures</p>
+      <div className="grid grid-cols-3 gap-1.5">
+        {fields.map(([k, label]) => (
+          <label key={k} htmlFor={`${base}-${k}`} className="flex min-w-0 flex-col gap-0.5 text-xs text-stone-400">{label}
+            <input id={`${base}-${k}`} type="number" inputMode="numeric" min="0" max="9999" step="1" required value={d[k]} onChange={(e) => setD({ ...d, [k]: e.target.value })} className={inputCls} />
+          </label>
+        ))}
+      </div>
+      {item.ing.length > 0 && (
+        <div className="grid grid-cols-2 gap-1.5 border-t border-stone-700 pt-2">
+          {item.ing.map(([n]) => (
+            <label key={n} htmlFor={`${base}-i-${slug(n)}`} className="flex min-w-0 flex-col gap-0.5 text-xs text-stone-400">{n}
+              <input id={`${base}-i-${slug(n)}`} type="number" inputMode="numeric" min="0" max="9999" step="1" required value={d.ing[n]} onChange={(e) => setD({ ...d, ing: { ...d.ing, [n]: e.target.value } })} className={inputCls} />
+            </label>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5">
+        <button type="submit" className={`${small} border-amber-600 bg-amber-500 text-stone-950 hover:bg-amber-400`}>Save</button>
+        <button type="button" onClick={onCancel} className={`${small} border-stone-600 text-stone-200 hover:border-stone-400`}>Cancel</button>
+        {item.edited && <button type="button" onClick={onReset} className={`${small} flex items-center gap-1 border-stone-600 text-stone-300 hover:border-red-600 hover:text-red-300`}><Undo size={12} aria-hidden="true" />Reset to default</button>}
+      </div>
+    </form>
+  );
+};
+const EditFooter = ({ item, editing, onEdit }) => (
+  <div className="flex items-center justify-between gap-2">
+    {item.edited ? <span className="flex items-center gap-1 text-xs font-bold text-amber-400"><Pencil size={11} aria-hidden="true" />Edited by you</span> : <span />}
+    {!editing && <button type="button" onClick={onEdit} className="flex items-center gap-1 text-xs font-bold text-stone-400 underline decoration-dotted underline-offset-2 hover:text-amber-300"><Pencil size={11} aria-hidden="true" />Edit figures</button>}
+  </div>
+);
 
 /* ───────── Cards ───────── */
-const FoodCard = ({ f, selected, full, onToggle, onStation, rank, scope }) => (
-  <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
-    whileHover={{ y: -3 }} transition={{ duration: 0.18 }}
-    style={biomeCardStyle(f.biome)} className={`wood flex flex-col gap-2 rounded-sm p-3 ${selected ? "ring-2 ring-amber-500" : ""}`}>
-    <header className="flex items-start justify-between gap-2">
-      <div className="min-w-0">
-        <h3 className="display text-xl leading-tight text-stone-100">{f.name}</h3>
-        <p className="mt-1 flex flex-wrap items-center gap-1.5"><BiomeTag biome={f.biome} /><FocusTag type={f.type} />{rank && <TrophyTag rank={rank} type={f.type} scope={scope} />}</p>
-      </div>
-      <button onClick={() => onToggle(f.id)} disabled={!selected && full}
-        className={`flex shrink-0 items-center gap-1 rounded-sm border px-2 py-1 text-sm font-bold transition-colors ${selected ? "border-amber-500 bg-amber-500 text-stone-950 hover:bg-amber-400" : "border-amber-700 text-amber-300 hover:bg-amber-500 hover:text-stone-950 disabled:cursor-not-allowed disabled:border-stone-700 disabled:text-stone-600 disabled:hover:bg-transparent"}`}>
-        {selected ? <><Check size={14} aria-hidden="true" />On plate</> : full ? "Plates full" : <><Plus size={14} aria-hidden="true" />Eat</>}
-      </button>
-    </header>
-    <div className="flex flex-wrap items-center gap-1.5">
-      <Badge stat="hp" value={f.hp} /><Badge stat="st" value={f.st} /><Badge stat="eitr" value={f.eitr} />
-    </div>
-    <dl className="num flex flex-wrap gap-x-4 gap-y-1 text-sm text-stone-400">
-      <div className="flex items-center gap-1" title="How long this food lasts after eating"><Timer size={13} aria-hidden="true" /><dt className="sr-only">Duration</dt><dd>Lasts {fmtDur(f.duration)}</dd></div>
-      <div className="flex items-center gap-1"><Activity size={13} aria-hidden="true" /><dt className="sr-only">Health regen</dt><dd>{f.regen} hp/tick</dd></div>
-    </dl>
-    <StationChips station={f.station} level={cauldronLevel(f)} onOpen={onStation} />
-    <div className="mt-auto border-t border-stone-700/70 pt-2">
-      <Ingredients ing={f.ing} />
-      {f.yieldN > 1 && <p className="mt-1 text-xs text-stone-500">One craft makes {f.yieldN}.</p>}
-    </div>
-  </motion.article>
-);
+const FoodCard = ({ f, selected, full, picked, onToggle, onReplace, onStation, onIngredient, rank, onSaveEdit }) => {
+  const [editing, setEditing] = useState(false);
+  return (
+    <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
+      whileHover={{ y: -3 }} transition={{ duration: 0.18 }}
+      style={biomeCardStyle(f.biome)} className={`wood flex flex-col gap-2 rounded-sm p-3 ${selected ? "ring-2 ring-amber-500" : ""}`}>
+      <header className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="display text-xl leading-tight text-stone-100">{f.name}</h3>
+          <p className="mt-1 flex flex-wrap items-center gap-1.5"><BiomeTag biome={f.biome} /><FocusTag type={f.type} />{rank && <TrophyTag rank={rank} type={f.type} scope={`in ${f.biome}`} />}</p>
+        </div>
+        {selected || !full ? (
+          <button onClick={() => onToggle(f.id)}
+            className={`flex shrink-0 items-center gap-1 rounded-sm border px-2 py-1 text-sm font-bold transition-colors ${selected ? "border-amber-500 bg-amber-500 text-stone-950 hover:bg-amber-400" : "border-amber-700 text-amber-300 hover:bg-amber-500 hover:text-stone-950"}`}>
+            {selected ? <><Check size={14} aria-hidden="true" />On plate</> : <><Plus size={14} aria-hidden="true" />Eat</>}
+          </button>
+        ) : (
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <span className="text-[0.65rem] font-bold uppercase leading-none tracking-wider text-stone-400">Swap into plate</span>
+            <div className="flex gap-1">
+              {picked.map((p, i) => (
+                <button key={i} onClick={() => onReplace(i, f.id)} title={`Replace ${p.name} on plate ${i + 1}`} aria-label={`Put ${f.name} on plate ${i + 1}, replacing ${p.name}`}
+                  className="num h-7 w-7 rounded-sm border border-amber-700 text-sm font-bold text-amber-300 transition-colors hover:bg-amber-500 hover:text-stone-950">{i + 1}</button>
+              ))}
+            </div>
+          </div>
+        )}
+      </header>
+      {editing ? (
+        <EditForm item={f} fields={FOOD_FIELDS} onCancel={() => setEditing(false)}
+          onSave={(d) => { onSaveEdit(f.id, d); setEditing(false); }} onReset={() => { onSaveEdit(f.id, null); setEditing(false); }} />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge stat="hp" value={f.hp} /><Badge stat="st" value={f.st} /><Badge stat="eitr" value={f.eitr} />
+          </div>
+          <dl className="num flex flex-wrap gap-x-4 gap-y-1 text-sm text-stone-400">
+            <div className="flex items-center gap-1" title="How long this food lasts after eating"><Timer size={13} aria-hidden="true" /><dt className="sr-only">Duration</dt><dd>Lasts {fmtDur(f.duration)}</dd></div>
+            <div className="flex items-center gap-1"><Activity size={13} aria-hidden="true" /><dt className="sr-only">Health regen</dt><dd>{f.regen} hp/tick</dd></div>
+          </dl>
+          <StationChips station={f.station} level={cauldronLevel(f)} onOpen={onStation} />
+          <div className="mt-auto border-t border-stone-700/70 pt-2">
+            <Ingredients ing={f.ing} onPick={onIngredient} />
+            {f.yieldN > 1 && <p className="mt-1 text-xs text-stone-500">One craft makes {f.yieldN}.</p>}
+          </div>
+        </>
+      )}
+      <EditFooter item={f} editing={editing} onEdit={() => setEditing(true)} />
+    </motion.article>
+  );
+};
 
 const CAT = { Healing: "bg-red-950/70 text-red-300 border-red-800/70", Stamina: "bg-yellow-950/60 text-yellow-200 border-yellow-700/60",
   Resistance: "bg-sky-950/70 text-sky-200 border-sky-800/70", Utility: "bg-purple-950/70 text-purple-200 border-purple-700/70" };
@@ -446,31 +704,42 @@ const Step = ({ Icon, title, children }) => (
     {children}
   </div>
 );
-const MeadCard = ({ m, onStation }) => (
-  <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
-    whileHover={{ y: -3 }} transition={{ duration: 0.18 }} style={biomeCardStyle(m.biome)} className="wood flex flex-col gap-3 rounded-sm p-3.5">
-    <header className="flex items-start justify-between gap-2">
-      <div className="min-w-0">
-        <h3 className="display text-xl leading-tight text-stone-100">{m.name}</h3>
-        <p className="mt-1"><BiomeTag biome={m.biome} /></p>
-      </div>
-      <span className={`shrink-0 rounded-sm border px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider ${CAT[m.category]}`}>{m.category}</span>
-    </header>
-    <p className="text-base font-medium text-amber-100">{m.effect}</p>
-    <p className="num flex flex-wrap gap-x-4 text-sm text-stone-400">
-      <span className="flex items-center gap-1"><Clock size={13} aria-hidden="true" />Lasts {fmtDur(m.duration)}</span>
-      <span className="flex items-center gap-1"><Hourglass size={13} aria-hidden="true" />Cooldown {fmtDur(m.cooldown)}</span>
-    </p>
-    <StationChips station={m.station} onOpen={onStation} />
-    <div className="mt-auto flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-stretch">
-      <Step Icon={Flame} title="Mead base (Mead Ketill)"><Ingredients ing={m.ing} /></Step>
-      <Arrow size={16} className="hidden shrink-0 self-center text-amber-600 sm:block" aria-hidden="true" />
-      <Step Icon={Hourglass} title="Ferment"><p className="text-sm text-stone-300">2 in-game days in a Fermenter, about 1 hour of play.</p></Step>
-      <Arrow size={16} className="hidden shrink-0 self-center text-amber-600 sm:block" aria-hidden="true" />
-      <Step Icon={Beer} title="Yield"><p className="display num text-2xl leading-none text-amber-300">{m.yieldN}×</p><p className="text-sm text-stone-300">meads per base</p></Step>
-    </div>
-  </motion.article>
-);
+const MeadCard = ({ m, onStation, onIngredient, onSaveEdit }) => {
+  const [editing, setEditing] = useState(false);
+  return (
+    <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
+      whileHover={{ y: -3 }} transition={{ duration: 0.18 }} style={biomeCardStyle(m.biome)} className="wood flex flex-col gap-3 rounded-sm p-3.5">
+      <header className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="display text-xl leading-tight text-stone-100">{m.name}</h3>
+          <p className="mt-1"><BiomeTag biome={m.biome} /></p>
+        </div>
+        <span className={`shrink-0 rounded-sm border px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider ${CAT[m.category]}`}>{m.category}</span>
+      </header>
+      <p className="text-base font-medium text-amber-100">{m.effect}</p>
+      {editing ? (
+        <EditForm item={m} fields={MEAD_FIELDS} onCancel={() => setEditing(false)}
+          onSave={(d) => { onSaveEdit(m.id, d); setEditing(false); }} onReset={() => { onSaveEdit(m.id, null); setEditing(false); }} />
+      ) : (
+        <>
+          <p className="num flex flex-wrap gap-x-4 text-sm text-stone-400">
+            <span className="flex items-center gap-1"><Timer size={13} aria-hidden="true" />Lasts {fmtDur(m.duration)}</span>
+            <span className="flex items-center gap-1"><Hourglass size={13} aria-hidden="true" />Cooldown {fmtDur(m.cooldown)}</span>
+          </p>
+          <StationChips station={m.station} onOpen={onStation} />
+          <div className="mt-auto flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-stretch">
+            <Step Icon={Flame} title="Mead base (Mead Ketill)"><Ingredients ing={m.ing} onPick={onIngredient} /></Step>
+            <Arrow size={16} className="hidden shrink-0 self-center text-amber-600 sm:block" aria-hidden="true" />
+            <Step Icon={Hourglass} title="Ferment"><p className="text-sm text-stone-300">2 in-game days in a Fermenter, about 1 hour of play.</p></Step>
+            <Arrow size={16} className="hidden shrink-0 self-center text-amber-600 sm:block" aria-hidden="true" />
+            <Step Icon={Beer} title="Yield"><p className="display num text-2xl leading-none text-amber-300">{m.yieldN}×</p><p className="text-sm text-stone-300">meads per base</p></Step>
+          </div>
+        </>
+      )}
+      <EditFooter item={m} editing={editing} onEdit={() => setEditing(true)} />
+    </motion.article>
+  );
+};
 
 const btnQuiet = "flex items-center gap-1.5 rounded-sm border border-stone-600 px-2.5 py-1.5 text-sm font-bold text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-35";
 const btnMain = "flex items-center gap-1.5 rounded-sm border border-amber-600 bg-amber-500 px-3 py-1.5 text-sm font-bold text-stone-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:border-stone-700 disabled:bg-transparent disabled:text-stone-600";
@@ -581,9 +850,101 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
   );
 };
 
+const EditsPanel = ({ edits, setEdits }) => {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [msg, setMsg] = useState("");
+  const [target, setTarget] = useState("All");
+  const [confirm, setConfirm] = useState(false);
+  const ids = Object.keys(edits);
+  const n = ids.length;
+  const biomeOf = (id) => { const hit = ITEM_BY_NORM.get(normName(id)); return hit ? hit.item.biome : null; };
+  const countFor = (b) => (b === "All" ? n : ids.filter((id) => biomeOf(id) === b).length);
+  const exportText = editsToText(edits);
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  const copy = () => {
+    const fail = () => setMsg("Copying is blocked here. Select the text in the box and copy it by hand.");
+    try { navigator.clipboard.writeText(exportText).then(() => setMsg("Copied. Paste it into any chat or note."), fail); } catch (e) { fail(); }
+  };
+  const share = async () => {
+    try { await navigator.share({ title: EDIT_HEAD, text: exportText }); }
+    catch (e) { if (!e || e.name !== "AbortError") setMsg("Sharing to apps is not available in this view. Use Copy to clipboard instead."); }
+  };
+  const add = () => {
+    const got = textToEdits(text);
+    const k = Object.keys(got).length;
+    if (!k) { setMsg("No corrections found in that text. Each line should look like: Bread | health 25 | stamina 72"); return; }
+    setEdits({ ...edits, ...got }); setText(""); setMsg(`Added corrections for ${k} item${k > 1 ? "s" : ""}.`);
+  };
+  const doReset = () => {
+    if (target === "All") setEdits({});
+    else { const next = {}; ids.forEach((id) => { if (biomeOf(id) !== target) next[id] = edits[id]; }); setEdits(next); }
+    setConfirm(false); setMsg(target === "All" ? "Every figure is back to default." : `${target} figures are back to default.`);
+  };
+  return (
+    <section aria-labelledby="fix-h" className="mt-3 rounded-sm border border-stone-700 bg-stone-950/40">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-left hover:text-amber-300">
+        <Pencil size={15} className="text-amber-500" aria-hidden="true" />
+        <span id="fix-h" className="font-bold text-stone-100">Corrections</span>
+        <span className="text-sm text-stone-400">{n ? `${n} item${n > 1 ? "s" : ""} edited by you` : "Spotted a wrong number? Press Edit figures on any card."}</span>
+        <Chevron size={16} className={`ml-auto transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="flex flex-col gap-4 border-t border-stone-700 p-3">
+          <p className="max-w-prose text-sm text-stone-400">Your edits are saved in this browser only and replace the built-in figures everywhere on the page, including plate totals and trophies.</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={copy} disabled={!n} className={btnMain}><Copy size={15} aria-hidden="true" />Copy to clipboard</button>
+            {canShare && <button type="button" onClick={share} disabled={!n} className={btnMain}><Share size={15} aria-hidden="true" />Share to apps</button>}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-2">
+              <h3 className="font-bold text-stone-100">Add corrections a friend sent</h3>
+              <label htmlFor="edits-import" className="sr-only">Paste corrections text</label>
+              <textarea id="edits-import" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste corrections text here" rows={4}
+                className="w-full rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-200 placeholder:text-stone-600" />
+              <button type="button" onClick={add} disabled={!text.trim()} className={`${btnQuiet} w-fit`}><Plus size={15} aria-hidden="true" />Add pasted corrections</button>
+            </div>
+            <div className="flex min-w-0 flex-col gap-2">
+              <h3 className="font-bold text-stone-100">Your corrections as text</h3>
+              <label htmlFor="edits-export" className="sr-only">Your corrections as text</label>
+              <textarea id="edits-export" readOnly value={n ? exportText : ""} placeholder="Edit a figure and it appears here." rows={4} onFocus={(e) => e.target.select()}
+                className="w-full rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-300 placeholder:text-stone-600" />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 border-t border-stone-700 pt-3">
+            <label htmlFor="edits-reset" className="text-sm font-bold text-stone-200">Reset to default</label>
+            <select id="edits-reset" value={target} onChange={(e) => { setTarget(e.target.value); setConfirm(false); }} className="rounded-sm border border-stone-700 px-2 py-1.5 text-sm text-stone-100">
+              <option value="All">Everything ({n})</option>
+              {BIOMES.map((b) => <option key={b} value={b}>{b} ({countFor(b)})</option>)}
+            </select>
+            {confirm ? (
+              <span className="flex flex-wrap items-center gap-2 rounded-sm border border-red-800 bg-red-950/50 px-2.5 py-1 text-sm text-red-100">
+                Undo {countFor(target)} edit{countFor(target) === 1 ? "" : "s"}?
+                <button type="button" onClick={doReset} className="rounded-sm bg-red-600 px-2 py-0.5 font-bold text-white hover:bg-red-500">Yes, reset</button>
+                <button type="button" onClick={() => setConfirm(false)} className="rounded-sm border border-stone-500 px-2 py-0.5 font-bold text-stone-200 hover:border-stone-300">Keep them</button>
+              </span>
+            ) : (
+              <button type="button" onClick={() => setConfirm(true)} disabled={!countFor(target)} className={btnQuiet}><Undo size={15} aria-hidden="true" />Reset</button>
+            )}
+          </div>
+        </div>
+      )}
+      {msg && <p role="status" aria-live="polite" className="border-t border-stone-700 px-3 py-2 text-sm text-amber-300">{msg}</p>}
+    </section>
+  );
+};
+
 /* ───────── App ───────── */
 function App() {
-  const [slots, setSlots] = useState(() => buildPreset(["hp", "st", "eitr"], 7));
+  const [edits, setEdits] = useState(loadEdits);
+  useEffect(() => { try { localStorage.setItem(EDIT_KEY, JSON.stringify(edits)); } catch (e) {} }, [edits]);
+  const foodsAll = useMemo(() => FOODS.map((f) => withEdits(f, edits[f.id], true)), [edits]);
+  const meadsAll = useMemo(() => MEADS.map((m) => withEdits(m, edits[m.id], false)), [edits]);
+  const saveEdit = (id, patch) => setEdits((prev) => { const next = { ...prev }; delete next[id]; return patch ? { ...next, ...cleanEdits({ [id]: patch }) } : next; });
+  const [ingredient, setIngredient] = useState(null);
+  const [news, setNews] = useState(() => !newsSeen());
+  const closeNews = () => { try { localStorage.setItem(NEWS_KEY, NEWS_ID); } catch (e) {} setNews(false); };
+  const [slots, setSlots] = useState(() => buildPreset(["hp", "st", "eitr"], 7, foodsAll));
   const [tier, setTier] = useState(7);
   const [tab, setTab] = useState("foods");
   const [biome, setBiome] = useState("All");
@@ -596,7 +957,7 @@ function App() {
   const [saved, setSaved] = useState(loadSaved);
   useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(saved)); } catch (e) {} }, [saved]);
 
-  const picked = slots.map((id) => FOODS.find((f) => f.id === id)).filter(Boolean);
+  const picked = slots.map((id) => foodsAll.find((f) => f.id === id)).filter(Boolean);
   const totals = {
     hp: BASE.hp + picked.reduce((a, f) => a + f.hp, 0),
     st: BASE.st + picked.reduce((a, f) => a + f.st, 0),
@@ -607,22 +968,22 @@ function App() {
     const map = new Map();
     picked.forEach((f) => (f.ing.length ? f.ing : [[f.name, 1]]).forEach(([n, qty]) => map.set(n, (map.get(n) || 0) + qty)));
     return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  }, [slots.join("|")]);
+  }, [slots.join("|"), edits]);
 
+  const replaceAt = (i, id) => setSlots((s) => s.map((x, j) => (j === i ? id : x)));
   const toggle = (id) => setSlots((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length < 3 ? [...s, id] : s));
 
   const foods = useMemo(() => {
-    const list = FOODS.filter((f) => (biome === "All" || f.biome === biome) && (focus === "All" || f.type === focus) && fuzzy(q, f));
+    const list = foodsAll.filter((f) => (biome === "All" || f.biome === biome) && (focus === "All" || f.type === focus) && fuzzy(q, f));
     const by = { health: (a, b) => b.hp - a.hp, stamina: (a, b) => b.st - a.st, eitr: (a, b) => b.eitr - a.eitr, duration: (a, b) => b.duration - a.duration };
     return sort === "progression" ? list : [...list].sort(by[sort]);
-  }, [biome, focus, q, sort]);
+  }, [biome, focus, q, sort, foodsAll]);
   const meads = useMemo(() => {
-    const list = MEADS.filter((m) => (biome === "All" || m.biome === biome) && (cat === "All" || m.category === cat) && fuzzy(q, m));
+    const list = meadsAll.filter((m) => (biome === "All" || m.biome === biome) && (cat === "All" || m.category === cat) && fuzzy(q, m));
     return sort === "duration" ? [...list].sort((a, b) => b.duration - a.duration) : list;
-  }, [biome, cat, q, sort]);
+  }, [biome, cat, q, sort, meadsAll]);
   const shown = tab === "foods" ? foods : meads;
-  const ranks = useMemo(() => rankFoods(biome === "All" ? FOODS : FOODS.filter((f) => f.biome === biome)), [biome]);
-  const scope = biome === "All" ? "of all foods" : `in ${biome}`;
+  const ranks = useMemo(() => { const out = {}; BIOMES.forEach((b) => Object.assign(out, rankFoods(foodsAll.filter((f) => f.biome === b)))); return out; }, [foodsAll]);
   const reset = () => { setBiome("All"); setFocus("All"); setCat("All"); setQ(""); };
 
   return (
@@ -644,7 +1005,7 @@ function App() {
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
               {PRESETS.map((p) => (
-                <motion.button key={p.id} whileTap={{ scale: 0.97 }} onClick={() => setSlots(buildPreset(p.pick, tier))}
+                <motion.button key={p.id} whileTap={{ scale: 0.97 }} onClick={() => setSlots(buildPreset(p.pick, tier, foodsAll))}
                   className="wood group flex items-center gap-2.5 rounded-sm p-2.5 text-left transition-colors hover:border-amber-500">
                   <p.Icon size={22} className="shrink-0 text-amber-500 transition-transform group-hover:scale-110" aria-hidden="true" />
                   <span className="min-w-0"><span className="block font-bold leading-tight text-stone-100">{p.label}</span><span className="block text-sm text-stone-400">{p.hint}</span></span>
@@ -706,7 +1067,7 @@ function App() {
                   {shopping.length ? (
                     <>
                       <ul className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3 lg:grid-cols-4">
-                        {shopping.map(([n, qty]) => <li key={n} className="flex items-baseline gap-2 text-stone-200"><span className="num w-8 shrink-0 text-right font-bold text-amber-400">{qty}×</span><span className="min-w-0">{n}</span></li>)}
+                        {shopping.map(([n, qty]) => <li key={n} className="flex items-baseline gap-2 text-stone-200"><span className="num w-8 shrink-0 text-right font-bold text-amber-400">{qty}×</span><button type="button" onClick={() => setIngredient(n)} title={`Where to get ${n}`} className={`min-w-0 ${ingBtn}`}>{n}</button></li>)}
                       </ul>
                       <p className="mt-2 text-sm text-stone-500">Raw ingredients for one craft of each recipe. Base stats without food are 25 health and 50 stamina.</p>
                     </>
@@ -752,11 +1113,12 @@ function App() {
               : ["All", "Healing", "Stamina", "Resistance", "Utility"].map((t) => <Pill key={t} active={cat === t} onClick={() => setCat(t)}>{t === "All" ? "Any category" : t}</Pill>)}
           </div>
 
+          <EditsPanel edits={edits} setEdits={setEdits} />
           {tab === "foods" && (
             <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-400">
               <span>Fork colour shows the focus:</span>
               {["Health", "Stamina", "Balanced", "Eitr"].map((t) => <FocusTag key={t} type={t} />)}
-              <span className="inline-flex items-center gap-1"><Trophy size={13} style={{ color: RANK[1].hex }} aria-hidden="true" />Trophies mark the top three for each focus {scope}.</span>
+              <span className="inline-flex items-center gap-1"><TrophyIcon rank={1} size={14} /><TrophyIcon rank={2} size={14} /><TrophyIcon rank={3} size={14} />Trophies mark the top three for each focus within each biome.</span>
             </p>
           )}
           <p className="num mt-4 text-sm text-stone-500">{shown.length} {tab === "foods" ? "foods" : "meads"} shown</p>
@@ -769,17 +1131,20 @@ function App() {
             <div className={`mt-3 grid gap-3 ${tab === "foods" ? "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" : "lg:grid-cols-2"}`}>
               <AnimatePresence mode="popLayout" initial={false}>
                 {tab === "foods"
-                  ? foods.map((f) => <FoodCard key={f.id} f={f} selected={slots.includes(f.id)} full={slots.length >= 3} onToggle={toggle} onStation={setStation} rank={ranks[f.id]} scope={scope} />)
-                  : meads.map((m) => <MeadCard key={m.id} m={m} onStation={setStation} />)}
+                  ? foods.map((f) => <FoodCard key={f.id} f={f} selected={slots.includes(f.id)} full={slots.length >= 3} picked={picked} onToggle={toggle} onReplace={replaceAt} onStation={setStation} onIngredient={setIngredient} rank={ranks[f.id]} onSaveEdit={saveEdit} />)
+                  : meads.map((m) => <MeadCard key={m.id} m={m} onStation={setStation} onIngredient={setIngredient} onSaveEdit={saveEdit} />)}
               </AnimatePresence>
             </div>
           )}
         </section>
 
         <AnimatePresence>{station && <StationModal key="station" open={station} onClose={() => setStation(null)} />}</AnimatePresence>
+        <AnimatePresence>{ingredient && <IngredientModal key="ingredient" name={ingredient} foods={foodsAll} onPick={setIngredient} onClose={() => setIngredient(null)} />}</AnimatePresence>
+        <AnimatePresence>{news && !station && !ingredient && <NewsModal key="news" onClose={closeNews} />}</AnimatePresence>
 
         <footer className="mt-10 border-t border-stone-800 pt-4 text-sm text-stone-500">
           <p className="max-w-prose">Stats follow the community wiki. Ashlands recipe quantities and regen ticks, and the Deep North entries from the 1.0 launch guides, are the least certain, so check them in game before a long farming trip. Station build costs come from memory and guides, so treat them as a guide too. Feasts and the Bog Witch utility brews are not listed.</p>
+          <button type="button" onClick={() => setNews(true)} className="mt-2 flex items-center gap-1.5 text-sm font-bold text-stone-400 underline decoration-dotted underline-offset-2 hover:text-amber-300"><Megaphone size={14} aria-hidden="true" />What's new</button>
         </footer>
       </div>
     </MotionConfig>
