@@ -525,7 +525,7 @@ const UPDATES = [
   ] },
   { v: 7, date: "10 Oct 2026", items: [
     ["Favourites", "Press the star beside any food or mead name to pin it in a Favourites section above the full list."],
-    ["Steadier cards", "Biome, focus, trophy and stat badges now sit in the same place on every food card."],
+    ["Steadier cards", "Biome, focus, trophy and stat badges now sit in the same place on every food card. Health regen sits under the health badge, and foods that craft several at once say Makes 4 beside their name."],
   ] },
 ];
 const LATEST = UPDATES[UPDATES.length - 1].v;
@@ -1017,7 +1017,7 @@ const FoodCard = ({ f, selected, full, picked, onToggle, onReplace, onStation, o
       <header className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-start gap-1">
           <FavButton on={fav} onClick={() => onFav(f.id)} name={f.name} />
-          <h3 className="display line-clamp-2 min-h-[2.5em] text-xl leading-tight text-stone-100" title={f.name}>{f.name}</h3>
+          <h3 className="display line-clamp-2 min-h-[2.5em] text-xl leading-tight text-stone-100" title={f.yieldN > 1 ? `${f.name}: one craft makes ${f.yieldN}` : f.name}>{f.name}{f.yieldN > 1 && <span className="num ml-1.5 inline-block rounded-sm bg-amber-500 px-1 align-middle text-xs font-bold leading-5 text-stone-950" style={{ fontFamily: "var(--font-body)" }}>Makes {f.yieldN}</span>}</h3>
         </div>
         {selected || !full ? (
           <button onClick={() => onToggle(f.id)}
@@ -1048,17 +1048,14 @@ const FoodCard = ({ f, selected, full, picked, onToggle, onReplace, onStation, o
           onSave={(d) => { onSaveEdit(f.id, d); setEditing(false); }} onReset={() => { onSaveEdit(f.id, null); setEditing(false); }} />
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-3 gap-x-1.5 gap-y-1">
             <Badge stat="hp" value={f.hp} wide /><Badge stat="st" value={f.st} wide /><Badge stat="eitr" value={f.eitr} wide />
+            <p className="num flex items-center justify-center gap-1 whitespace-nowrap text-xs text-red-300" title="Health regenerated every 10 seconds while this food is active"><Activity size={12} aria-hidden="true" />+{f.regen} hp/tick</p>
+            <p className="num col-span-2 flex items-center justify-end gap-1 text-sm text-stone-400" title="How long this food lasts after eating"><Timer size={13} aria-hidden="true" />Lasts {fmtDur(f.duration)}</p>
           </div>
-          <dl className="num grid grid-cols-2 gap-x-2 text-sm text-stone-400">
-            <div className="flex items-center gap-1" title="How long this food lasts after eating"><Timer size={13} aria-hidden="true" /><dt className="sr-only">Duration</dt><dd>Lasts {fmtDur(f.duration)}</dd></div>
-            <div className="flex items-center gap-1"><Activity size={13} aria-hidden="true" /><dt className="sr-only">Health regen</dt><dd>{f.regen} hp/tick</dd></div>
-          </dl>
           <div className="min-h-[3.4rem]"><StationChips station={f.station} level={cauldronLevel(f)} onOpen={onStation} /></div>
           <div className="mt-auto border-t border-stone-700/70 pt-2">
             <Ingredients ing={f.ing} onPick={onIngredient} />
-            {f.yieldN > 1 && <p className="mt-1 text-xs text-stone-500">One craft makes {f.yieldN}.</p>}
           </div>
         </>
       )}
