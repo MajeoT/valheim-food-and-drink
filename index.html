@@ -39,20 +39,18 @@ select{background-color:#292524}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/framer-motion@11.11.17/dist/framer-motion.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/lucide-react@0.453.0/dist/umd/lucide-react.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.25.6/babel.min.js"></script>
 
 <script type="text/babel" data-presets="react">
 const { useState, useMemo, useEffect } = React;
 const { motion, AnimatePresence, MotionConfig } = window.Motion;
-const L = window.LucideReact || {};
-const icon = (n) => L[n] || (() => null);
-const Heart = icon("Heart"), Zap = icon("Zap"), Sparkles = icon("Sparkles"), Search = icon("Search"),
-  X = icon("X"), Plus = icon("Plus"), Check = icon("Check"), Clock = icon("Clock"), Flask = icon("FlaskConical"),
-  Utensils = icon("Utensils"), Basket = icon("ShoppingBasket"), Chevron = icon("ChevronDown"),
-  Shield = icon("Shield"), Compass = icon("Compass"), Wand = icon("Wand2"), Scale = icon("Scale"),
-  Arrow = icon("ArrowRight"), Beer = icon("Beer"), Trash = icon("Trash2"), Hourglass = icon("Hourglass"),
-  Activity = icon("Activity"), Timer = icon("Timer"), Trophy = icon("Trophy"), Save = icon("Save"), Copy = icon("Copy"), Share = icon("Share2"), Flame = icon("Flame"), Info = icon("Info"), Hammer = icon("Hammer"), Pencil = icon("Pencil"), Undo = icon("RotateCcw"), MapPin = icon("MapPin"), Megaphone = icon("Megaphone");
+// Icons are Lucide drawings (ISC licence, lucide.dev), inlined so they never depend on a second script loading.
+const ICONS = {"heart": "<path d=\"M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z\" />", "zap": "<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\" />", "sparkles": "<path d=\"M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z\" /> <path d=\"M20 3v4\" /> <path d=\"M22 5h-4\" /> <path d=\"M4 17v2\" /> <path d=\"M5 18H3\" />", "search": "<circle cx=\"11\" cy=\"11\" r=\"8\" /> <path d=\"m21 21-4.3-4.3\" />", "x": "<path d=\"M18 6 6 18\" /> <path d=\"m6 6 12 12\" />", "plus": "<path d=\"M5 12h14\" /> <path d=\"M12 5v14\" />", "check": "<path d=\"M20 6 9 17l-5-5\" />", "clock": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <polyline points=\"12 6 12 12 16 14\" />", "flask-conical": "<path d=\"M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2\" /> <path d=\"M8.5 2h7\" /> <path d=\"M7 16h10\" />", "utensils": "<path d=\"M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2\" /> <path d=\"M7 2v20\" /> <path d=\"M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7\" />", "shopping-basket": "<path d=\"m15 11-1 9\" /> <path d=\"m19 11-4-7\" /> <path d=\"M2 11h20\" /> <path d=\"m3.5 11 1.6 7.4a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6l1.7-7.4\" /> <path d=\"M4.5 15.5h15\" /> <path d=\"m5 11 4-7\" /> <path d=\"m9 11 1 9\" />", "chevron-down": "<path d=\"m6 9 6 6 6-6\" />", "shield": "<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\" />", "compass": "<path d=\"m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z\" /> <circle cx=\"12\" cy=\"12\" r=\"10\" />", "wand-sparkles": "<path d=\"m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72\" /> <path d=\"m14 7 3 3\" /> <path d=\"M5 6v4\" /> <path d=\"M19 14v4\" /> <path d=\"M10 2v2\" /> <path d=\"M7 8H3\" /> <path d=\"M21 16h-4\" /> <path d=\"M11 3H9\" />", "scale": "<path d=\"m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z\" /> <path d=\"m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z\" /> <path d=\"M7 21h10\" /> <path d=\"M12 3v18\" /> <path d=\"M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2\" />", "arrow-right": "<path d=\"M5 12h14\" /> <path d=\"m12 5 7 7-7 7\" />", "beer": "<path d=\"M17 11h1a3 3 0 0 1 0 6h-1\" /> <path d=\"M9 12v6\" /> <path d=\"M13 12v6\" /> <path d=\"M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1.5 3 1.5 1.72-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-.78 0-1.5-.5-2.5-.5Z\" /> <path d=\"M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8\" />", "trash-2": "<path d=\"M3 6h18\" /> <path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\" /> <path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\" /> <line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\" /> <line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\" />", "hourglass": "<path d=\"M5 22h14\" /> <path d=\"M5 2h14\" /> <path d=\"M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22\" /> <path d=\"M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2\" />", "activity": "<path d=\"M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2\" />", "timer": "<line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\" /> <line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\" /> <circle cx=\"12\" cy=\"14\" r=\"8\" />", "trophy": "<path d=\"M6 9H4.5a2.5 2.5 0 0 1 0-5H6\" /> <path d=\"M18 9h1.5a2.5 2.5 0 0 0 0-5H18\" /> <path d=\"M4 22h16\" /> <path d=\"M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22\" /> <path d=\"M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22\" /> <path d=\"M18 2H6v7a6 6 0 0 0 12 0V2Z\" />", "save": "<path d=\"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\" /> <path d=\"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7\" /> <path d=\"M7 3v4a1 1 0 0 0 1 1h7\" />", "copy": "<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /> <path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />", "share-2": "<circle cx=\"18\" cy=\"5\" r=\"3\" /> <circle cx=\"6\" cy=\"12\" r=\"3\" /> <circle cx=\"18\" cy=\"19\" r=\"3\" /> <line x1=\"8.59\" x2=\"15.42\" y1=\"13.51\" y2=\"17.49\" /> <line x1=\"15.41\" x2=\"8.59\" y1=\"6.51\" y2=\"10.49\" />", "flame": "<path d=\"M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z\" />", "info": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"M12 16v-4\" /> <path d=\"M12 8h.01\" />", "hammer": "<path d=\"m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9\" /> <path d=\"m18 15 4-4\" /> <path d=\"m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5\" />", "pencil": "<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" /> <path d=\"m15 5 4 4\" />", "rotate-ccw": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /> <path d=\"M3 3v5h5\" />", "map-pin": "<path d=\"M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0\" /> <circle cx=\"12\" cy=\"10\" r=\"3\" />", "megaphone": "<path d=\"m3 11 18-5v12L3 14v-3z\" /> <path d=\"M11.6 16.8a3 3 0 1 1-5.8-1.6\" />", "lock": "<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\" /> <path d=\"M7 11V7a5 5 0 0 1 10 0v4\" />"};
+const icon = (key) => ({ size = 24, className = "", fill = "none", stroke = "currentColor", strokeWidth = 2, ...rest }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={stroke} strokeWidth={strokeWidth}
+    strokeLinecap="round" strokeLinejoin="round" className={`inline-block shrink-0 ${className}`} {...rest} dangerouslySetInnerHTML={{ __html: ICONS[key] }} />
+);
+const Heart = icon("heart"), Zap = icon("zap"), Sparkles = icon("sparkles"), Search = icon("search"), X = icon("x"), Plus = icon("plus"), Check = icon("check"), Clock = icon("clock"), Flask = icon("flask-conical"), Utensils = icon("utensils"), Basket = icon("shopping-basket"), Chevron = icon("chevron-down"), Shield = icon("shield"), Compass = icon("compass"), Wand = icon("wand-sparkles"), Scale = icon("scale"), Arrow = icon("arrow-right"), Beer = icon("beer"), Trash = icon("trash-2"), Hourglass = icon("hourglass"), Activity = icon("activity"), Timer = icon("timer"), Trophy = icon("trophy"), Save = icon("save"), Copy = icon("copy"), Share = icon("share-2"), Flame = icon("flame"), Info = icon("info"), Hammer = icon("hammer"), Pencil = icon("pencil"), Undo = icon("rotate-ccw"), MapPin = icon("map-pin"), Megaphone = icon("megaphone"), Lock = icon("lock");
 
 /* ───────── Data ───────── */
 const BIOMES = ["Meadows", "Black Forest", "Swamps", "Mountain", "Plains", "Mistlands", "Ashlands", "Deep North"];
@@ -289,6 +287,49 @@ const buildPreset = (pick, tier, list = FOODS) => {
   return chosen;
 };
 
+/* ───────── Share codes: one unbroken run of capital letters and digits ───────── */
+// Letters and digits only, so chat apps cannot reformat it and a double-tap selects all of it.
+// Layout: VH + kind (P presets, E corrections) + 1 + base32(JSON bytes + 2 check bytes).
+const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const checkSum = (bytes) => { let sum = 0; for (const b of bytes) sum = (sum * 31 + b) % 65521; return sum; };
+const toCode = (kind, obj) => {
+  const body = new TextEncoder().encode(JSON.stringify(obj));
+  const sum = checkSum(body);
+  const all = new Uint8Array(body.length + 2);
+  all.set(body); all[body.length] = sum >> 8; all[body.length + 1] = sum & 255;
+  let bits = 0, val = 0, out = "";
+  for (const b of all) {
+    val = (val << 8) | b; bits += 8;
+    while (bits >= 5) { out += B32[(val >>> (bits - 5)) & 31]; bits -= 5; }
+    val &= (1 << bits) - 1;
+  }
+  if (bits) out += B32[(val << (5 - bits)) & 31];
+  return "VH" + kind + "1" + out;
+};
+// Returns { ok: data } for a good code, { found: true } for a damaged one, { found: false } when there is no code.
+const fromCode = (kind, raw) => {
+  const tryOne = (text) => {
+    const m = text.toUpperCase().match(new RegExp("VH" + kind + "1([A-Z2-7]+)"));
+    if (!m) return null;
+    const bytes = [];
+    let bits = 0, val = 0;
+    for (const c of m[1]) {
+      val = (val << 5) | B32.indexOf(c); bits += 5;
+      if (bits >= 8) { bytes.push((val >>> (bits - 8)) & 255); bits -= 8; }
+      val &= (1 << bits) - 1;
+    }
+    if (bytes.length < 3) return undefined;
+    const body = bytes.slice(0, -2);
+    if (checkSum(body) !== ((bytes[bytes.length - 2] << 8) | bytes[bytes.length - 1])) return undefined;
+    try { return JSON.parse(new TextDecoder().decode(new Uint8Array(body))); } catch (e) { return undefined; }
+  };
+  const a = tryOne(String(raw));
+  if (a) return { ok: a };
+  const b = tryOne(String(raw).replace(/[\s​-‍﻿]+/g, ""));
+  if (b) return { ok: b };
+  return { found: a !== null || b !== null };
+};
+
 /* ───────── Saved presets (this browser only) ───────── */
 const LS_KEY = "valheim-planner-presets";
 const cleanPresets = (arr) => Array.isArray(arr) ? arr.map((p) => ({
@@ -382,16 +423,33 @@ const loadEdits = () => { try { return cleanEdits(JSON.parse(localStorage.getIte
 const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
 /* ───────── What's new ───────── */
-const NEWS_ID = "2026-10-10-corrections";
-const NEWS_KEY = "valheim-planner-news-seen";
-const NEWS = [
-  ["Fix any number yourself", "Press Edit figures on a food or mead card to change its stats, times or ingredient amounts. Your changes stay in this browser."],
-  ["Share your corrections", "Open Corrections above the cards to copy or share your changes as text, add a friend's, or reset one biome or everything."],
-  ["Swap into a full plate", "When all three plates are full, each food shows 1, 2 and 3 buttons to replace that plate."],
-  ["See where ingredients come from", "Tap any ingredient name to see which creature, plant or station gives it."],
-  ["Trophies are now per biome", "Gold, silver and bronze mark the top three foods for each focus within their own biome."],
+// Add a new entry at the end for each release. Visitors see every entry newer than the last one they dismissed.
+const UPDATES = [
+  { v: 1, date: "10 Oct 2026", items: [
+    ["Fix any number yourself", "Press Edit figures on a food or mead card to change its stats, times or ingredient amounts."],
+    ["Share your corrections", "Open Corrections above the cards to copy or share your changes, add a friend's, or reset one biome or everything."],
+    ["Swap into a full plate", "When all three plates are full, each food shows 1, 2 and 3 buttons to replace that plate."],
+    ["See where ingredients come from", "Tap any ingredient name to see which creature, plant or station gives it."],
+    ["Trophies are per biome", "Gold, silver and bronze mark the top three foods for each focus within their own biome."],
+  ] },
+  { v: 2, date: "10 Oct 2026", items: [
+    ["Icons are back", "Buttons and badges across the page were missing their icons. They are drawn in now, including proper trophies."],
+    ["One-piece share codes", "Presets and corrections now share as a single unbroken code, so nothing gets lost when you copy and paste. Older shared text still works."],
+    ["Clearer editing", "Every card has a visible Edit figures button, and a notice at the top explains that your changes stay on your device."],
+    ["Catch-up notes", "Miss a few updates and this box lists everything since your last visit."],
+  ] },
 ];
-const newsSeen = () => { try { return localStorage.getItem(NEWS_KEY) === NEWS_ID; } catch (e) { return false; } };
+const LATEST = UPDATES[UPDATES.length - 1].v;
+const NEWS_KEY = "valheim-planner-news-seen";      // first release stored a text id here
+const NEWS_VER_KEY = "valheim-planner-news-version";
+const lastSeenUpdate = () => {
+  try {
+    const n = parseInt(localStorage.getItem(NEWS_VER_KEY), 10);
+    if (n >= 0) return n;
+    if (localStorage.getItem(NEWS_KEY) === "2026-10-10-corrections") return 1;
+  } catch (e) {}
+  return LATEST - 1; // first visit: show only the newest notes
+};
 
 /* ───────── Focus forks and trophies ───────── */
 const FOCUS_HEX = { Health: "#f87171", Stamina: "#fde047", Balanced: "#f5f5f4", Eitr: "#c084fc" };
@@ -423,8 +481,9 @@ const TrophyTag = ({ rank, type, scope }) => {
   const what = type === "Balanced" ? "balanced stats" : type.toLowerCase();
   const tip = `${r.word} ${what} ${scope}`;
   return (
-    <span className="num inline-flex items-center gap-0.5 text-xs font-bold" style={{ color: r.hex }} title={tip}>
-      <TrophyIcon rank={rank} />{r.label}<span className="sr-only"> {tip}</span>
+    <span className="num inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider" title={tip}
+      style={{ color: r.hex, backgroundColor: r.hex + "24", border: `1px solid ${r.hex}99` }}>
+      <TrophyIcon rank={rank} size={15} />{r.label}<span className="sr-only"> {tip}</span>
     </span>
   );
 };
@@ -586,16 +645,26 @@ const IngredientModal = ({ name, foods, onPick, onClose }) => {
     </Modal>
   );
 };
-const NewsModal = ({ onClose }) => (
-  <Modal labelId="news-h" onClose={onClose}>
-    <ModalHead id="news-h" eyebrow="Latest update" title="What's new" onClose={onClose} closeLabel="Dismiss" />
-    <ul className="mt-3 flex flex-col gap-2.5">
-      {NEWS.map(([t, d]) => <li key={t}><p className="font-bold text-amber-200">{t}</p><p className="text-sm text-stone-300">{d}</p></li>)}
-    </ul>
-    <button onClick={onClose} className="mt-4 w-full rounded-sm border border-amber-600 bg-amber-500 px-3 py-2 font-bold text-stone-950 hover:bg-amber-400">Got it</button>
-    <p className="mt-2 text-center text-xs text-stone-500">This will not show again until the next update.</p>
-  </Modal>
-);
+const NewsModal = ({ since, onClose }) => {
+  const list = UPDATES.filter((u) => u.v > since).reverse();
+  return (
+    <Modal labelId="news-h" onClose={onClose}>
+      <ModalHead id="news-h" eyebrow={since === 0 ? "Update history" : list.length > 1 ? `${list.length} updates since your last visit` : "Latest update"} title="What's new" onClose={onClose} closeLabel="Dismiss" />
+      <div className="mt-3 flex flex-col gap-4">
+        {list.map((u) => (
+          <section key={u.v}>
+            <h3 className="mb-1.5 border-b border-stone-700 pb-1 text-xs font-bold uppercase tracking-wider text-stone-400">Update {u.v} · {u.date}</h3>
+            <ul className="flex flex-col gap-2">
+              {u.items.map(([t, d]) => <li key={t}><p className="font-bold text-amber-200">{t}</p><p className="text-sm text-stone-300">{d}</p></li>)}
+            </ul>
+          </section>
+        ))}
+      </div>
+      <button onClick={onClose} className="mt-4 w-full rounded-sm border border-amber-600 bg-amber-500 px-3 py-2 font-bold text-stone-950 hover:bg-amber-400">Got it</button>
+      <p className="mt-2 text-center text-xs text-stone-500">This will not show again until the next update.</p>
+    </Modal>
+  );
+};
 
 const FOOD_FIELDS = [["hp", "Health", (f) => f.hp], ["st", "Stamina", (f) => f.st], ["eitr", "Eitr", (f) => f.eitr], ["min", "Lasts (min)", (f) => Math.round(f.duration / 60)], ["regen", "Regen / tick", (f) => f.regen]];
 const MEAD_FIELDS = [["duration", "Lasts (sec)", (m) => m.duration], ["cooldown", "Cooldown (sec)", (m) => m.cooldown]];
@@ -638,8 +707,9 @@ const EditForm = ({ item, fields, onSave, onCancel, onReset }) => {
 };
 const EditFooter = ({ item, editing, onEdit }) => (
   <div className="flex items-center justify-between gap-2">
-    {item.edited ? <span className="flex items-center gap-1 text-xs font-bold text-amber-400"><Pencil size={11} aria-hidden="true" />Edited by you</span> : <span />}
-    {!editing && <button type="button" onClick={onEdit} className="flex items-center gap-1 text-xs font-bold text-stone-400 underline decoration-dotted underline-offset-2 hover:text-amber-300"><Pencil size={11} aria-hidden="true" />Edit figures</button>}
+    {item.edited ? <span className="flex items-center gap-1 rounded-sm bg-amber-500 px-1.5 py-0.5 text-xs font-bold text-stone-950"><Pencil size={11} aria-hidden="true" />Edited by you</span> : <span />}
+    {!editing && <button type="button" onClick={onEdit} title="Change these numbers if they are wrong. Saved on this device only."
+      className="flex items-center gap-1.5 rounded-sm border border-stone-500 bg-stone-950/50 px-2 py-1 text-xs font-bold text-stone-100 transition-colors hover:border-amber-500 hover:bg-amber-500 hover:text-stone-950"><Pencil size={13} aria-hidden="true" />Edit figures</button>}
   </div>
 );
 
@@ -749,7 +819,7 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
   const [confirmAll, setConfirmAll] = useState(false);
-  const exportText = presetsToText(saved);
+  const exportText = toCode("P", saved.map((p) => [p.name, ...p.foods]));
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
   const save = (e) => {
     e.preventDefault();
@@ -759,25 +829,30 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
     setName(""); setMsg(`Saved "${n}" in this browser.`);
   };
   const importFrom = (raw) => {
-    const list = textToPresets(raw);
-    if (!list.length) { setMsg("No presets found in that text. Each line should look like: Name: food + food + food"); return; }
+    const r = fromCode("P", raw);
+    let list;
+    if (r.ok) list = cleanPresets((Array.isArray(r.ok) ? r.ok : []).map((a) => (Array.isArray(a) ? { name: a[0], foods: a.slice(1) } : null)));
+    else if (r.found) { setMsg("That code is incomplete or damaged. Copy the whole code and paste it again."); return; }
+    else if (/VHE1/i.test(raw)) { setMsg("That is a corrections code. Paste it into the Corrections panel instead."); return; }
+    else list = textToPresets(raw);
+    if (!list.length) { setMsg("No preset code found in that text. A preset code starts with VHP1."); return; }
     const names = new Set(list.map((p) => p.name));
     setSaved([...saved.filter((p) => !names.has(p.name)), ...list]);
     setText(""); setMsg(`Added ${list.length} preset${list.length > 1 ? "s" : ""}. Presets with the same name were replaced.`);
   };
   const copy = () => {
     const fail = () => { setOpen(true); setMsg("Copying is blocked here. Select the text in the box below and copy it by hand."); };
-    try { navigator.clipboard.writeText(exportText).then(() => setMsg("Copied. Paste it into any chat or note."), fail); } catch (e) { fail(); }
+    try { navigator.clipboard.writeText(exportText).then(() => setMsg("Preset code copied. Paste it into any chat or note."), fail); } catch (e) { fail(); }
   };
   const share = async () => {
-    try { await navigator.share({ title: SHARE_HEAD, text: exportText }); }
+    try { await navigator.share({ text: exportText }); }
     catch (e) { if (!e || e.name !== "AbortError") setMsg("Sharing to apps is not available in this view. Use Copy to clipboard instead."); }
   };
   return (
     <section aria-labelledby="mine-h" className="mt-5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2 id="mine-h" className="text-xs font-bold uppercase tracking-widest text-stone-400">My presets</h2>
-        <span className="text-sm text-stone-500">saved in this browser only</span>
+        <span className="inline-flex items-center gap-1 text-sm text-stone-400"><Lock size={12} aria-hidden="true" />saved on this device only, not shared</span>
       </div>
       <form onSubmit={save} className="mt-2 flex flex-wrap gap-2">
         <label htmlFor="preset-name" className="sr-only">Preset name</label>
@@ -809,7 +884,7 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
         <button type="button" onClick={copy} disabled={!saved.length} className={btnMain}><Copy size={15} aria-hidden="true" />Copy to clipboard</button>
         {canShare && <button type="button" onClick={share} disabled={!saved.length} className={btnMain}><Share size={15} aria-hidden="true" />Share to apps</button>}
         <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className={btnQuiet}>
-          <Plus size={15} aria-hidden="true" />Add presets from text
+          <Plus size={15} aria-hidden="true" />Add presets from a code
           <Chevron size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
         </button>
         {saved.length > 1 && (confirmAll ? (
@@ -828,18 +903,18 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
             <div className="wood mt-3 grid gap-4 rounded-sm p-3 md:grid-cols-2">
               <div className="flex min-w-0 flex-col gap-2">
                 <h3 className="font-bold text-stone-100">Add presets someone sent you</h3>
-                <p className="text-sm text-stone-400">Paste the message here. One preset per line, like <span className="font-mono text-xs text-stone-300">Tank: Bread + Honey + Sausages</span></p>
+                <p className="text-sm text-stone-400">Paste the code they sent. It starts with <span className="font-mono text-xs text-stone-300">VHP1</span> and is one long run of letters and digits.</p>
                 <label htmlFor="preset-import" className="sr-only">Paste preset text</label>
-                <textarea id="preset-import" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste preset text here" rows={5}
-                  className="w-full rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-200 placeholder:text-stone-600" />
+                <textarea id="preset-import" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste preset code here" rows={5}
+                  className="w-full break-all rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-200 placeholder:text-stone-600" />
                 <button type="button" onClick={() => importFrom(text)} disabled={!text.trim()} className={`${btnQuiet} w-fit`}><Plus size={15} aria-hidden="true" />Add pasted presets</button>
               </div>
               <div className="flex min-w-0 flex-col gap-2">
-                <h3 className="font-bold text-stone-100">Your presets as text</h3>
-                <p className="text-sm text-stone-400">This is what the copy and share buttons send. Tap the box to select it all.</p>
+                <h3 className="font-bold text-stone-100">Your preset share code</h3>
+                <p className="text-sm text-stone-400">This is what the copy and share buttons send: one unbroken code with no spaces. Tap the box to select it all.</p>
                 <label htmlFor="preset-export" className="sr-only">Your presets as text</label>
-                <textarea id="preset-export" readOnly value={saved.length ? exportText : ""} placeholder="Save a preset and its text appears here." rows={5} onFocus={(e) => e.target.select()}
-                  className="w-full rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-300 placeholder:text-stone-600" />
+                <textarea id="preset-export" readOnly value={saved.length ? exportText : ""} placeholder="Save a preset and its code appears here." rows={5} onFocus={(e) => e.target.select()}
+                  className="w-full break-all rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-300 placeholder:text-stone-600" />
               </div>
             </div>
           </motion.div>
@@ -860,20 +935,25 @@ const EditsPanel = ({ edits, setEdits }) => {
   const n = ids.length;
   const biomeOf = (id) => { const hit = ITEM_BY_NORM.get(normName(id)); return hit ? hit.item.biome : null; };
   const countFor = (b) => (b === "All" ? n : ids.filter((id) => biomeOf(id) === b).length);
-  const exportText = editsToText(edits);
+  const exportText = toCode("E", edits);
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
   const copy = () => {
     const fail = () => setMsg("Copying is blocked here. Select the text in the box and copy it by hand.");
     try { navigator.clipboard.writeText(exportText).then(() => setMsg("Copied. Paste it into any chat or note."), fail); } catch (e) { fail(); }
   };
   const share = async () => {
-    try { await navigator.share({ title: EDIT_HEAD, text: exportText }); }
+    try { await navigator.share({ text: exportText }); }
     catch (e) { if (!e || e.name !== "AbortError") setMsg("Sharing to apps is not available in this view. Use Copy to clipboard instead."); }
   };
   const add = () => {
-    const got = textToEdits(text);
+    const r = fromCode("E", text);
+    let got;
+    if (r.ok) got = cleanEdits(r.ok);
+    else if (r.found) { setMsg("That code is incomplete or damaged. Copy the whole code and paste it again."); return; }
+    else if (/VHP1/i.test(text)) { setMsg("That is a preset code. Paste it under My presets instead."); return; }
+    else got = textToEdits(text);
     const k = Object.keys(got).length;
-    if (!k) { setMsg("No corrections found in that text. Each line should look like: Bread | health 25 | stamina 72"); return; }
+    if (!k) { setMsg("No corrections code found in that text. A corrections code starts with VHE1."); return; }
     setEdits({ ...edits, ...got }); setText(""); setMsg(`Added corrections for ${k} item${k > 1 ? "s" : ""}.`);
   };
   const doReset = () => {
@@ -882,16 +962,16 @@ const EditsPanel = ({ edits, setEdits }) => {
     setConfirm(false); setMsg(target === "All" ? "Every figure is back to default." : `${target} figures are back to default.`);
   };
   return (
-    <section aria-labelledby="fix-h" className="mt-3 rounded-sm border border-stone-700 bg-stone-950/40">
+    <section aria-labelledby="fix-h" className="mt-3 rounded-sm border border-amber-800/80 bg-stone-950/40">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-left hover:text-amber-300">
         <Pencil size={15} className="text-amber-500" aria-hidden="true" />
-        <span id="fix-h" className="font-bold text-stone-100">Corrections</span>
-        <span className="text-sm text-stone-400">{n ? `${n} item${n > 1 ? "s" : ""} edited by you` : "Spotted a wrong number? Press Edit figures on any card."}</span>
+        <span id="fix-h" className="font-bold text-stone-100">Corrections: edit any figure</span>
+        <span className="text-sm text-stone-400">{n ? `${n} item${n > 1 ? "s" : ""} edited by you` : "Spotted a wrong number? Press the Edit figures button on any card."}</span>
         <Chevron size={16} className={`ml-auto transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
       </button>
       {open && (
         <div className="flex flex-col gap-4 border-t border-stone-700 p-3">
-          <p className="max-w-prose text-sm text-stone-400">Your edits are saved in this browser only and replace the built-in figures everywhere on the page, including plate totals and trophies.</p>
+          <p className="flex max-w-prose items-start gap-2 text-sm text-stone-300"><Lock size={14} className="mt-0.5 text-amber-400" aria-hidden="true" /><span>Your edits are saved on this device only. They change the figures everywhere on this page for you, and for nobody else, unless you send your share code and they add it.</span></p>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={copy} disabled={!n} className={btnMain}><Copy size={15} aria-hidden="true" />Copy to clipboard</button>
             {canShare && <button type="button" onClick={share} disabled={!n} className={btnMain}><Share size={15} aria-hidden="true" />Share to apps</button>}
@@ -900,15 +980,15 @@ const EditsPanel = ({ edits, setEdits }) => {
             <div className="flex min-w-0 flex-col gap-2">
               <h3 className="font-bold text-stone-100">Add corrections a friend sent</h3>
               <label htmlFor="edits-import" className="sr-only">Paste corrections text</label>
-              <textarea id="edits-import" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste corrections text here" rows={4}
-                className="w-full rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-200 placeholder:text-stone-600" />
+              <textarea id="edits-import" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste corrections code here (starts with VHE1)" rows={4}
+                className="w-full break-all rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-200 placeholder:text-stone-600" />
               <button type="button" onClick={add} disabled={!text.trim()} className={`${btnQuiet} w-fit`}><Plus size={15} aria-hidden="true" />Add pasted corrections</button>
             </div>
             <div className="flex min-w-0 flex-col gap-2">
-              <h3 className="font-bold text-stone-100">Your corrections as text</h3>
+              <h3 className="font-bold text-stone-100">Your corrections share code</h3>
               <label htmlFor="edits-export" className="sr-only">Your corrections as text</label>
-              <textarea id="edits-export" readOnly value={n ? exportText : ""} placeholder="Edit a figure and it appears here." rows={4} onFocus={(e) => e.target.select()}
-                className="w-full rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-300 placeholder:text-stone-600" />
+              <textarea id="edits-export" readOnly value={n ? exportText : ""} placeholder="Edit a figure and its code appears here." rows={4} onFocus={(e) => e.target.select()}
+                className="w-full break-all rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-300 placeholder:text-stone-600" />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 border-t border-stone-700 pt-3">
@@ -942,8 +1022,8 @@ function App() {
   const meadsAll = useMemo(() => MEADS.map((m) => withEdits(m, edits[m.id], false)), [edits]);
   const saveEdit = (id, patch) => setEdits((prev) => { const next = { ...prev }; delete next[id]; return patch ? { ...next, ...cleanEdits({ [id]: patch }) } : next; });
   const [ingredient, setIngredient] = useState(null);
-  const [news, setNews] = useState(() => !newsSeen());
-  const closeNews = () => { try { localStorage.setItem(NEWS_KEY, NEWS_ID); } catch (e) {} setNews(false); };
+  const [news, setNews] = useState(() => { const seen = lastSeenUpdate(); return seen < LATEST ? { since: seen } : null; });
+  const closeNews = () => { try { localStorage.setItem(NEWS_VER_KEY, String(LATEST)); } catch (e) {} setNews(null); };
   const [slots, setSlots] = useState(() => buildPreset(["hp", "st", "eitr"], 7, foodsAll));
   const [tier, setTier] = useState(7);
   const [tab, setTab] = useState("foods");
@@ -993,6 +1073,10 @@ function App() {
           <p className="rune" aria-hidden="true">ᚠᛟᛟᛞ ᚨᚾᛞ ᛗᛖᚨᛞ</p>
           <h1 className="display text-4xl font-bold text-amber-400 sm:text-5xl">Valheim Mead &amp; Feast Planner</h1>
           <p className="mt-1 max-w-prose text-lg text-stone-400">Fill three plates, read your health, stamina and eitr before you leave the hall, and see what to gather.</p>
+          <p className="mt-3 flex max-w-prose items-start gap-2 rounded-sm border border-amber-700/80 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">
+            <Lock size={16} className="mt-0.5 text-amber-400" aria-hidden="true" />
+            <span><strong>Your changes stay on this device.</strong> Presets and edited figures are saved in this browser only. Nobody else sees them unless you send them a share code.</span>
+          </p>
 
           <section aria-labelledby="presets-h" className="mt-5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -1140,11 +1224,11 @@ function App() {
 
         <AnimatePresence>{station && <StationModal key="station" open={station} onClose={() => setStation(null)} />}</AnimatePresence>
         <AnimatePresence>{ingredient && <IngredientModal key="ingredient" name={ingredient} foods={foodsAll} onPick={setIngredient} onClose={() => setIngredient(null)} />}</AnimatePresence>
-        <AnimatePresence>{news && !station && !ingredient && <NewsModal key="news" onClose={closeNews} />}</AnimatePresence>
+        <AnimatePresence>{news && !station && !ingredient && <NewsModal key="news" since={news.since} onClose={closeNews} />}</AnimatePresence>
 
         <footer className="mt-10 border-t border-stone-800 pt-4 text-sm text-stone-500">
           <p className="max-w-prose">Stats follow the community wiki. Ashlands recipe quantities and regen ticks, and the Deep North entries from the 1.0 launch guides, are the least certain, so check them in game before a long farming trip. Station build costs come from memory and guides, so treat them as a guide too. Feasts and the Bog Witch utility brews are not listed.</p>
-          <button type="button" onClick={() => setNews(true)} className="mt-2 flex items-center gap-1.5 text-sm font-bold text-stone-400 underline decoration-dotted underline-offset-2 hover:text-amber-300"><Megaphone size={14} aria-hidden="true" />What's new</button>
+          <button type="button" onClick={() => setNews({ since: 0 })} className="mt-2 flex items-center gap-1.5 text-sm font-bold text-stone-400 underline decoration-dotted underline-offset-2 hover:text-amber-300"><Megaphone size={14} aria-hidden="true" />What's new</button>
         </footer>
       </div>
     </MotionConfig>
