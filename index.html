@@ -356,6 +356,16 @@ const textToPresets = (raw) => {
     return { name: l.slice(0, i), foods: l.slice(i + 1).split("+").map((x) => FOOD_BY_NORM.get(normName(x))).filter(Boolean) };
   }).filter(Boolean));
 };
+const PLATE_KEY = "valheim-planner-plates";
+// null means nothing stored yet; an empty list is a real choice and is kept.
+const loadPlates = (ids) => {
+  try {
+    const raw = localStorage.getItem(PLATE_KEY);
+    if (raw == null) return null;
+    const a = JSON.parse(raw);
+    return Array.isArray(a) ? a.filter((id, i) => ids.has(id) && a.indexOf(id) === i).slice(0, 3) : null;
+  } catch (e) { return null; }
+};
 const loadSaved = (ids) => { try { return cleanPresets(JSON.parse(localStorage.getItem(LS_KEY) || "[]"), ids); } catch (e) { return []; } };
 
 /* ───────── Corrections: your own figures, saved in this browser ───────── */
@@ -501,6 +511,10 @@ const UPDATES = [
     ["See what a friend's code changes", "Pasting a preset or corrections code now lists exactly what will be added or changed, and nothing happens until you confirm."],
     ["Tidier names", "Food, mead and ingredient names are capitalised word by word."],
   ] },
+  { v: 4, date: "10 Oct 2026", items: [
+    ["Plates are remembered", "Whatever is on your plates, including empty ones, is still there when you come back or refresh."],
+    ["Press a trophy", "Pressing a trophy opens the podium for that focus and biome, listing every food that shares each place."],
+  ] },
 ];
 const LATEST = UPDATES[UPDATES.length - 1].v;
 const NEWS_KEY = "valheim-planner-news-seen";      // first release stored a text id here
@@ -539,15 +553,16 @@ const rankFoods = (list) => {
   });
   return out;
 };
-const TrophyTag = ({ rank, type, scope }) => {
+const TrophyTag = ({ rank, type, scope, onOpen }) => {
   const r = RANK[rank];
   const what = type === "Balanced" ? "balanced stats" : type.toLowerCase();
-  const tip = `${r.word} ${what} ${scope}`;
+  const tip = `${r.word} ${what} ${scope}. Press to see the full podium.`;
   return (
-    <span className="num inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider" title={tip}
+    <button type="button" onClick={onOpen} title={tip}
+      className="num inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider transition-transform hover:scale-110"
       style={{ color: r.hex, backgroundColor: r.hex + "24", border: `1px solid ${r.hex}99` }}>
       <TrophyIcon rank={rank} size={15} />{r.label}<span className="sr-only"> {tip}</span>
-    </span>
+    </button>
   );
 };
 
@@ -729,6 +744,49 @@ const IngredientModal = ({ name, foods, onPick, onClose }) => {
     </Modal>
   );
 };
+const TrophyModal = ({ open, foods, ranks, slots, onToggle, onShow, onClose }) => {
+  const k = RANK_KEY[open.type];
+  const list = foods.filter((f) => f.biome === open.biome && f.type === open.type && ranks[f.id]);
+  const full = slots.length >= 3;
+  return (
+    <Modal labelId="trophy-h" onClose={onClose}>
+      <ModalHead id="trophy-h" eyebrow={`Top ${open.type.toLowerCase()} foods`} title={open.biome} onClose={onClose} />
+      <p className="mt-2 flex flex-wrap items-center gap-1.5"><BiomeTag biome={open.biome} /><FocusTag type={open.type} /></p>
+      <ol className="mt-3 flex flex-col gap-3">
+        {[1, 2, 3].map((rank) => {
+          const tied = list.filter((f) => ranks[f.id] === rank);
+          if (!tied.length) return null;
+          return (
+            <li key={rank} className={`rounded-sm border p-2 ${rank === open.rank ? "bg-stone-950/60" : "border-stone-700/70"}`} style={rank === open.rank ? { borderColor: RANK[rank].hex } : null}>
+              <p className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider" style={{ color: RANK[rank].hex }}>
+                <TrophyIcon rank={rank} size={18} />{RANK[rank].label}{tied.length > 1 && <span className="font-normal normal-case tracking-normal text-stone-400">shared by {tied.length} foods</span>}
+              </p>
+              <ul className="mt-1.5 flex flex-col gap-1.5">
+                {tied.map((f) => {
+                  const on = slots.includes(f.id);
+                  return (
+                    <li key={f.id} className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="min-w-0">
+                        <button type="button" onClick={() => onShow(f)} title="Show this food's card" className={`font-bold text-stone-100 ${ingBtn}`}>{f.name}</button>
+                        {f.custom && <> <CustomTag small /></>}
+                        <span className="mt-0.5 flex flex-wrap gap-1"><Badge stat="hp" value={f.hp} small /><Badge stat="st" value={f.st} small /><Badge stat="eitr" value={f.eitr} small /></span>
+                      </span>
+                      <button type="button" onClick={() => onToggle(f.id)} disabled={!on && full}
+                        className={`shrink-0 rounded-sm border px-2 py-1 text-xs font-bold transition-colors ${on ? "border-amber-500 bg-amber-500 text-stone-950" : "border-amber-700 text-amber-300 hover:bg-amber-500 hover:text-stone-950 disabled:cursor-not-allowed disabled:border-stone-700 disabled:text-stone-600 disabled:hover:bg-transparent"}`}>
+                        {on ? "On plate" : full ? "Plates full" : "Eat"}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="mt-3 text-sm text-stone-400">Ranked by {open.type === "Balanced" ? "matching health and stamina" : STAT[k].label.toLowerCase()} among {open.type.toLowerCase()} foods in this biome. Press a name to jump to its card.</p>
+    </Modal>
+  );
+};
 const NewsModal = ({ since, onClose }) => {
   const list = UPDATES.filter((u) => u.v > since).reverse();
   return (
@@ -887,7 +945,7 @@ const CustomModal = ({ form, onSave, onClose }) => {
   );
 };
 
-const FoodCard = ({ f, selected, full, picked, onToggle, onReplace, onStation, onIngredient, rank, onSaveEdit, onEditCustom, onDeleteCustom }) => {
+const FoodCard = ({ f, selected, full, picked, onToggle, onReplace, onStation, onIngredient, rank, onTrophy, onSaveEdit, onEditCustom, onDeleteCustom }) => {
   const [editing, setEditing] = useState(false);
   return (
     <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
@@ -896,7 +954,7 @@ const FoodCard = ({ f, selected, full, picked, onToggle, onReplace, onStation, o
       <header className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="display text-xl leading-tight text-stone-100">{f.name}</h3>
-          <p className="mt-1 flex flex-wrap items-center gap-1.5">{f.custom && <CustomTag />}<BiomeTag biome={f.biome} /><FocusTag type={f.type} />{rank && <TrophyTag rank={rank} type={f.type} scope={`in ${f.biome}`} />}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-1.5">{f.custom && <CustomTag />}<BiomeTag biome={f.biome} /><FocusTag type={f.type} />{rank && <TrophyTag rank={rank} type={f.type} scope={`in ${f.biome}`} onOpen={() => onTrophy({ biome: f.biome, type: f.type, rank })} />}</p>
         </div>
         {selected || !full ? (
           <button onClick={() => onToggle(f.id)}
@@ -1274,7 +1332,9 @@ function App() {
   const [ingredient, setIngredient] = useState(null);
   const [news, setNews] = useState(() => { const seen = lastSeenUpdate(); return seen < LATEST ? { since: seen } : null; });
   const closeNews = () => { try { localStorage.setItem(NEWS_VER_KEY, String(LATEST)); } catch (e) {} setNews(null); };
-  const [slots, setSlots] = useState(() => buildPreset(["hp", "st", "eitr"], 7, foodsAll));
+  const [slots, setSlots] = useState(() => loadPlates(new Set(foodsAll.map((f) => f.id))) || buildPreset(["hp", "st", "eitr"], 7, foodsAll));
+  useEffect(() => { try { localStorage.setItem(PLATE_KEY, JSON.stringify(slots)); } catch (e) {} }, [slots]);
+  const [trophy, setTrophy] = useState(null);
   const [tier, setTier] = useState(7);
   const [tab, setTab] = useState("foods");
   const [biome, setBiome] = useState("All");
@@ -1488,7 +1548,7 @@ function App() {
             <div className={`mt-3 grid gap-3 ${tab === "foods" ? "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" : "lg:grid-cols-2"}`}>
               <AnimatePresence mode="popLayout" initial={false}>
                 {tab === "foods"
-                  ? foods.map((f) => <FoodCard key={f.id} f={f} selected={slots.includes(f.id)} full={slots.length >= 3} picked={picked} onToggle={toggle} onReplace={replaceAt} onStation={setStation} onIngredient={setIngredient} rank={ranks[f.id]} onSaveEdit={saveEdit} onEditCustom={setCustomForm} onDeleteCustom={deleteCustom} />)
+                  ? foods.map((f) => <FoodCard key={f.id} f={f} selected={slots.includes(f.id)} full={slots.length >= 3} picked={picked} onToggle={toggle} onReplace={replaceAt} onStation={setStation} onIngredient={setIngredient} rank={ranks[f.id]} onTrophy={setTrophy} onSaveEdit={saveEdit} onEditCustom={setCustomForm} onDeleteCustom={deleteCustom} />)
                   : meads.map((m) => <MeadCard key={m.id} m={m} onStation={setStation} onIngredient={setIngredient} onSaveEdit={saveEdit} onEditCustom={setCustomForm} onDeleteCustom={deleteCustom} />)}
               </AnimatePresence>
             </div>
@@ -1497,8 +1557,10 @@ function App() {
 
         <AnimatePresence>{station && <StationModal key="station" open={station} onClose={() => setStation(null)} />}</AnimatePresence>
         <AnimatePresence>{ingredient && <IngredientModal key="ingredient" name={ingredient} foods={foodsAll} onPick={setIngredient} onClose={() => setIngredient(null)} />}</AnimatePresence>
+        <AnimatePresence>{trophy && <TrophyModal key="trophy" open={trophy} foods={foodsAll} ranks={ranks} slots={slots} onToggle={toggle} onClose={() => setTrophy(null)}
+          onShow={(f) => { setTab("foods"); setSort("progression"); setBiome("All"); setFocus("All"); setQ(f.name); setTrophy(null); }} />}</AnimatePresence>
         <AnimatePresence>{customForm && <CustomModal key={"custom-" + customForm.kind + (customForm.item ? customForm.item.id : "")} form={customForm} onSave={saveCustom} onClose={() => setCustomForm(null)} />}</AnimatePresence>
-        <AnimatePresence>{news && !station && !ingredient && !customForm && <NewsModal key="news" since={news.since} onClose={closeNews} />}</AnimatePresence>
+        <AnimatePresence>{news && !station && !ingredient && !customForm && !trophy && <NewsModal key="news" since={news.since} onClose={closeNews} />}</AnimatePresence>
 
         <footer className="mt-10 border-t border-stone-800 pt-4 text-sm text-stone-500">
           <p className="max-w-prose">Stats follow the community wiki. Ashlands recipe quantities and regen ticks, and the Deep North entries from the 1.0 launch guides, are the least certain, so check them in game before a long farming trip. Station build costs come from memory and guides, so treat them as a guide too. Feasts and the Bog Witch utility brews are not listed.</p>
