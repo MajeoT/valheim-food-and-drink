@@ -60,11 +60,13 @@ const BIOME_HEX = { Meadows: "#a3e635", "Black Forest": "#22a06b", Swamps: "#b08
 const biomeCardStyle = (b) => ({ borderLeft: `5px solid ${BIOME_HEX[b]}`, boxShadow: `inset 0 34px 26px -26px ${BIOME_HEX[b]}40, 0 10px 15px -3px rgba(0,0,0,.3)` });
 const BASE = { hp: 25, st: 50, eitr: 0 };
 
+const SMALL_WORDS = new Set(["and", "in", "of", "the", "a", "à", "la", "'n'", "n"]);
+const titleCase = (t) => String(t).split(" ").map((w, i) => (i > 0 && SMALL_WORDS.has(w.toLowerCase()) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
 const focusOf = (hp, st, eitr) => (eitr > hp && eitr > st ? "Eitr" : hp === st ? "Balanced" : hp > st ? "Health" : "Stamina");
 // [name, biome, hp, stamina, eitr, minutes, regen/tick, station, ingredients, yield]
 const F = (name, biome, hp, st, eitr, min, regen, station, ing = [], yieldN = 1) => {
   const type = focusOf(hp, st, eitr);
-  return { id: name, name, biome, hp, st, eitr, duration: min * 60, regen, station, ing, yieldN, type };
+  return { id: name, name: titleCase(name), biome, hp, st, eitr, duration: min * 60, regen, station, ing, yieldN, type };
 };
 const FOODS = [
   F("Raspberries", "Meadows", 7, 20, 0, 10, 1, "Foraged"),
@@ -150,7 +152,7 @@ const FOODS = [
 ];
 
 const M = (name, category, biome, effect, duration, cooldown, ing) =>
-  ({ id: name, name, category, biome, effect, duration, cooldown, ing, station: "Mead Ketill → Fermenter", yieldN: 6 });
+  ({ id: name, name: titleCase(name), category, biome, effect, duration, cooldown, ing, station: "Mead Ketill → Fermenter", yieldN: 6 });
 const MEADS = [
   M("Tasty mead", "Utility", "Black Forest", "+100% stamina regen, −50% health regen for 10s", 10, 10, [["Honey", 10], ["Raspberries", 10], ["Blueberries", 5]]),
   M("Minor healing mead", "Healing", "Black Forest", "Restores 50 health over 10s", 10, 120, [["Honey", 10], ["Blueberries", 5], ["Raspberries", 10], ["Dandelion", 1]]),
@@ -196,7 +198,7 @@ const STATIONS = {
 };
 const CAULDRON_LV = { Meadows: 1, "Black Forest": 1, Swamps: 2, Mountain: 3, Plains: 4, Mistlands: 5, Ashlands: 6 };
 const CAULDRON_LV_FOOD = { "Cooked egg": 1, "Fiery svinstew": 5, "Spicy marmalade": 5, "Sizzling berry broth": 5 };
-const cauldronLevel = (f) => CAULDRON_LV_FOOD[f.name] ?? CAULDRON_LV[f.biome] ?? null;
+const cauldronLevel = (f) => (f.custom ? null : CAULDRON_LV_FOOD[f.id] ?? CAULDRON_LV[f.biome] ?? null);
 const stationParts = (st) => st.split(/\s*(?:\+|→)\s*/);
 
 // Where each raw ingredient comes from. `b` lists biomes, `unsure` marks early Deep North information.
@@ -332,9 +334,10 @@ const fromCode = (kind, raw) => {
 
 /* ───────── Saved presets (this browser only) ───────── */
 const LS_KEY = "valheim-planner-presets";
-const cleanPresets = (arr) => Array.isArray(arr) ? arr.map((p) => ({
+const FOOD_IDS = new Set(FOODS.map((f) => f.id));
+const cleanPresets = (arr, ids = FOOD_IDS) => Array.isArray(arr) ? arr.map((p) => ({
   name: String((p && p.name) || "").trim().slice(0, 40),
-  foods: (p && Array.isArray(p.foods) ? p.foods : []).filter((id, i, a) => FOODS.some((f) => f.id === id) && a.indexOf(id) === i).slice(0, 3),
+  foods: (p && Array.isArray(p.foods) ? p.foods : []).filter((id, i, a) => ids.has(id) && a.indexOf(id) === i).slice(0, 3),
 })).filter((p) => p.name && p.foods.length) : [];
 const normName = (t) => t.toLowerCase().replace(/[‘’`´]/g, "'").replace(/\s+/g, " ").trim();
 const FOOD_BY_NORM = new Map(FOODS.map((f) => [normName(f.name), f.id]));
@@ -353,7 +356,7 @@ const textToPresets = (raw) => {
     return { name: l.slice(0, i), foods: l.slice(i + 1).split("+").map((x) => FOOD_BY_NORM.get(normName(x))).filter(Boolean) };
   }).filter(Boolean));
 };
-const loadSaved = () => { try { return cleanPresets(JSON.parse(localStorage.getItem(LS_KEY) || "[]")); } catch (e) { return []; } };
+const loadSaved = (ids) => { try { return cleanPresets(JSON.parse(localStorage.getItem(LS_KEY) || "[]"), ids); } catch (e) { return []; } };
 
 /* ───────── Corrections: your own figures, saved in this browser ───────── */
 const EDIT_KEY = "valheim-planner-edits";
@@ -421,6 +424,61 @@ const textToEdits = (raw) => {
 };
 const loadEdits = () => { try { return cleanEdits(JSON.parse(localStorage.getItem(EDIT_KEY) || "{}")); } catch (e) { return {}; } };
 const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+// What an incoming set of corrections would change, compared with what this person sees now.
+const FIELD_NAME = { hp: "health", st: "stamina", eitr: "eitr", min: "minutes", regen: "regen per tick", duration: "lasts (sec)", cooldown: "cooldown (sec)" };
+const planEdits = (got, edits) => Object.keys(got).map((id) => {
+  const { item, isFood } = ITEM_BY_NORM.get(normName(id));
+  const cur = withEdits(item, edits[id], isFood), nxt = withEdits(item, got[id], isFood);
+  const val = (x, k) => (k === "min" ? Math.round(x.duration / 60) : x[k]);
+  const changes = (isFood ? ["hp", "st", "eitr", "min", "regen"] : ["duration", "cooldown"]).filter((k) => val(cur, k) !== val(nxt, k)).map((k) => `${FIELD_NAME[k]} ${val(cur, k)} → ${val(nxt, k)}`);
+  item.ing.forEach(([n], i) => { if (cur.ing[i][1] !== nxt.ing[i][1]) changes.push(`${titleCase(n)} ${cur.ing[i][1]} → ${nxt.ing[i][1]}`); });
+  return { id, name: item.name, changes, overwrites: !!edits[id] };
+});
+
+/* ───────── Custom foods and meads: your own additions, saved in this browser ───────── */
+const CUSTOM_KEY = "valheim-planner-custom";
+const FOOD_STATIONS = ["Cooking Station", "Iron Cooking Station", "Cauldron", "Cauldron + Oven", "Oven", "Smoker", "Foraged", "Farmed"];
+const MEAD_CATS = ["Healing", "Stamina", "Resistance", "Utility"];
+const cleanIng = (raw) => (Array.isArray(raw) ? raw : [])
+  .map((x) => (Array.isArray(x) ? [String(x[0] == null ? "" : x[0]).replace(/\s+/g, " ").trim().slice(0, 30), toNum(x[1])] : null))
+  .filter((x) => x && x[0] && x[1] != null)
+  .filter((x, i, a) => a.findIndex((y) => normName(y[0]) === normName(x[0])) === i).slice(0, 8);
+// Rebuilds custom items from stored or shared data. Names that clash with built-in items, or with each other, are dropped.
+const cleanCustom = (raw) => {
+  const out = { foods: [], meads: [] };
+  const taken = new Set(ITEM_BY_NORM.keys());
+  const str = (v, n) => String(v == null ? "" : v).replace(/\s+/g, " ").trim().slice(0, n);
+  const take = (list, make) => (Array.isArray(list) ? list : []).slice(0, 60).forEach((r) => {
+    if (!r || typeof r !== "object") return;
+    const id = str(r.id, 40), key = normName(id);
+    if (!id || taken.has(key)) return;
+    taken.add(key); make(r, id, BIOMES.includes(r.biome) ? r.biome : "Meadows");
+  });
+  take(raw && raw.foods, (r, id, biome) => {
+    const hp = toNum(r.hp) || 0, st = toNum(r.st) || 0, eitr = toNum(r.eitr) || 0;
+    out.foods.push({ id, name: titleCase(id), biome, hp, st, eitr, duration: (toNum(r.min) || 0) * 60, regen: toNum(r.regen) || 0,
+      station: FOOD_STATIONS.includes(r.station) ? r.station : "Cauldron", ing: cleanIng(r.ing), yieldN: 1, type: focusOf(hp, st, eitr), custom: true });
+  });
+  take(raw && raw.meads, (r, id, biome) => {
+    out.meads.push({ id, name: titleCase(id), category: MEAD_CATS.includes(r.category) ? r.category : "Utility", biome, effect: str(r.effect, 90) || "Custom effect",
+      duration: toNum(r.duration) || 0, cooldown: toNum(r.cooldown) || 0, ing: cleanIng(r.ing), station: "Mead Ketill → Fermenter", yieldN: 6, custom: true });
+  });
+  return out;
+};
+const packFood = (f) => ({ id: f.id, biome: f.biome, hp: f.hp, st: f.st, eitr: f.eitr, min: Math.round(f.duration / 60), regen: f.regen, station: f.station, ing: f.ing });
+const packMead = (m) => ({ id: m.id, category: m.category, biome: m.biome, effect: m.effect, duration: m.duration, cooldown: m.cooldown, ing: m.ing });
+const packCustom = (c) => ({ foods: c.foods.map(packFood), meads: c.meads.map(packMead) });
+const loadCustom = () => { try { return cleanCustom(JSON.parse(localStorage.getItem(CUSTOM_KEY) || "{}")); } catch (e) { return cleanCustom(null); } };
+// "Honey 2, Carrot" or "2 Honey" style lists typed into the custom form.
+const parseIngText = (text) => cleanIng(String(text).split(/[,\n;]+/).map((part) => {
+  const t = part.trim();
+  let m = t.match(/^(\d+)\s*[x×]?\s+(.+)$/i);
+  if (m) return [m[2], m[1]];
+  m = t.match(/^(.+?)\s*[x×]?\s*(\d+)$/i);
+  return m ? [m[1], m[2]] : [t, 1];
+}));
+const ingToText = (ing) => ing.map(([n, q]) => `${n} ${q}`).join(", ");
+const describeCustom = (x) => (x.effect != null ? `${x.effect}. Lasts ${fmtDur(x.duration)}, cooldown ${fmtDur(x.cooldown)}.` : `${x.hp} health, ${x.st} stamina, ${x.eitr} eitr. Lasts ${fmtDur(x.duration)}, ${x.regen} hp per tick.`);
 
 /* ───────── What's new ───────── */
 // Add a new entry at the end for each release. Visitors see every entry newer than the last one they dismissed.
@@ -437,6 +495,11 @@ const UPDATES = [
     ["One-piece share codes", "Presets and corrections now share as a single unbroken code, so nothing gets lost when you copy and paste. Older shared text still works."],
     ["Clearer editing", "Every card has a visible Edit figures button, and a notice at the top explains that your changes stay on your device."],
     ["Catch-up notes", "Miss a few updates and this box lists everything since your last visit."],
+  ] },
+  { v: 3, date: "10 Oct 2026", items: [
+    ["Add your own foods and meads", "Use Add custom food or Add custom mead above the cards. Custom items get a pink Custom tag and a dashed outline so they are never mistaken for built-in ones."],
+    ["See what a friend's code changes", "Pasting a preset or corrections code now lists exactly what will be added or changed, and nothing happens until you confirm."],
+    ["Tidier names", "Food, mead and ingredient names are capitalised word by word."],
   ] },
 ];
 const LATEST = UPDATES[UPDATES.length - 1].v;
@@ -517,10 +580,31 @@ const Pill = ({ active, onClick, children }) => (
     {children}
   </button>
 );
+const CustomTag = ({ small }) => (
+  <span className={`inline-flex items-center gap-1 rounded-sm bg-pink-400 font-bold uppercase tracking-wider text-stone-950 ${small ? "px-1 text-[0.6rem] leading-4" : "px-1.5 py-0.5 text-xs"}`} title="You added this. It is not part of the built-in list.">
+    {!small && <Pencil size={11} aria-hidden="true" />}Custom
+  </span>
+);
+const customOutline = "outline-dashed outline-2 -outline-offset-2 outline-pink-400";
+const Review = ({ title, applyLabel, onApply, onCancel, children }) => (
+  <div role="region" aria-label={title} className="rounded-sm border-2 border-amber-500 bg-stone-950/70 p-2.5">
+    <p className="font-bold text-amber-200">{title}</p>
+    <p className="text-xs text-stone-400">Nothing has changed yet. Check the list, then confirm.</p>
+    <ul className="mt-2 flex max-h-64 flex-col gap-1.5 overflow-y-auto text-sm text-stone-200">{children}</ul>
+    <div className="mt-2.5 flex flex-wrap gap-2">
+      {onApply && <button type="button" onClick={onApply} className="rounded-sm border border-amber-600 bg-amber-500 px-2.5 py-1 text-sm font-bold text-stone-950 hover:bg-amber-400">{applyLabel}</button>}
+      <button type="button" onClick={onCancel} className="rounded-sm border border-stone-500 px-2.5 py-1 text-sm font-bold text-stone-200 hover:border-stone-300">{onApply ? "Cancel" : "Close"}</button>
+    </div>
+  </div>
+);
+const ReviewTag = ({ kind }) => {
+  const look = { New: "bg-emerald-400 text-stone-950", Replaces: "bg-amber-400 text-stone-950", Changes: "bg-amber-400 text-stone-950", Same: "bg-stone-600 text-stone-100" }[kind];
+  return <span className={`mr-1.5 rounded-sm px-1 text-[0.65rem] font-bold uppercase tracking-wider ${look}`}>{kind}</span>;
+};
 const ingBtn = "text-left underline decoration-stone-500 decoration-dotted underline-offset-2 transition-colors hover:text-amber-300 hover:decoration-amber-400";
 const Ingredients = ({ ing, onPick }) => ing.length ? (
   <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-stone-300">
-    {ing.map(([n, q]) => <li key={n}><span className="num font-bold text-amber-400">{q}×</span> {onPick ? <button type="button" onClick={() => onPick(n)} title={`Where to get ${n}`} className={ingBtn}>{n}</button> : n}</li>)}
+    {ing.map(([n, q]) => <li key={n}><span className="num font-bold text-amber-400">{q}×</span> {onPick ? <button type="button" onClick={() => onPick(n)} title={`Where to get ${n}`} className={ingBtn}>{titleCase(n)}</button> : titleCase(n)}</li>)}
   </ul>
 ) : <p className="text-sm italic text-stone-500">No recipe. Gather it in the wild.</p>;
 
@@ -562,7 +646,7 @@ const StationChips = ({ station, level, onOpen }) => {
 
 const CostList = ({ cost }) => (
   <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-stone-200">
-    {cost.map(([n, q]) => <li key={n}><span className="num font-bold text-amber-400">{q}×</span> {n}</li>)}
+    {cost.map(([n, q]) => <li key={n}><span className="num font-bold text-amber-400">{q}×</span> {titleCase(n)}</li>)}
   </ul>
 );
 const Modal = ({ labelId, onClose, children }) => {
@@ -624,10 +708,10 @@ const StationModal = ({ open, onClose }) => {
 };
 const IngredientModal = ({ name, foods, onPick, onClose }) => {
   const src = SOURCES[name];
-  const food = foods.find((f) => f.name === name);
+  const food = foods.find((f) => f.id === name);
   return (
     <Modal labelId="ing-h" onClose={onClose}>
-      <ModalHead id="ing-h" eyebrow="Where to get it" title={name} onClose={onClose} />
+      <ModalHead id="ing-h" eyebrow="Where to get it" title={titleCase(name)} onClose={onClose} />
       {src ? (
         <div className="mt-3 flex flex-col gap-2">
           <p className="flex flex-wrap items-center gap-1.5"><MapPin size={14} className="text-stone-400" aria-hidden="true" />{src.b.map((b) => <BiomeTag key={b} biome={b} />)}</p>
@@ -691,7 +775,7 @@ const EditForm = ({ item, fields, onSave, onCancel, onReset }) => {
       {item.ing.length > 0 && (
         <div className="grid grid-cols-2 gap-1.5 border-t border-stone-700 pt-2">
           {item.ing.map(([n]) => (
-            <label key={n} htmlFor={`${base}-i-${slug(n)}`} className="flex min-w-0 flex-col gap-0.5 text-xs text-stone-400">{n}
+            <label key={n} htmlFor={`${base}-i-${slug(n)}`} className="flex min-w-0 flex-col gap-0.5 text-xs text-stone-400">{titleCase(n)}
               <input id={`${base}-i-${slug(n)}`} type="number" inputMode="numeric" min="0" max="9999" step="1" required value={d.ing[n]} onChange={(e) => setD({ ...d, ing: { ...d.ing, [n]: e.target.value } })} className={inputCls} />
             </label>
           ))}
@@ -714,16 +798,105 @@ const EditFooter = ({ item, editing, onEdit }) => (
 );
 
 /* ───────── Cards ───────── */
-const FoodCard = ({ f, selected, full, picked, onToggle, onReplace, onStation, onIngredient, rank, onSaveEdit }) => {
+const CustomFooter = ({ item, onEdit, onDelete }) => {
+  const [sure, setSure] = useState(false);
+  const b = "flex items-center gap-1.5 rounded-sm border px-2 py-1 text-xs font-bold transition-colors";
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <span className="text-xs text-pink-200">Added by you, on this device</span>
+      {sure ? (
+        <span className="flex items-center gap-1.5 text-xs text-red-100">Delete it?
+          <button type="button" onClick={onDelete} className={`${b} border-red-600 bg-red-600 text-white hover:bg-red-500`}>Yes</button>
+          <button type="button" onClick={() => setSure(false)} className={`${b} border-stone-500 text-stone-200`}>No</button>
+        </span>
+      ) : (
+        <span className="flex gap-1.5">
+          <button type="button" onClick={onEdit} className={`${b} border-stone-500 bg-stone-950/50 text-stone-100 hover:border-amber-500 hover:bg-amber-500 hover:text-stone-950`}><Pencil size={13} aria-hidden="true" />Edit</button>
+          <button type="button" onClick={() => setSure(true)} className={`${b} border-red-900 bg-red-950/60 text-red-200 hover:bg-red-600 hover:text-white`}><Trash size={13} aria-hidden="true" />Delete</button>
+        </span>
+      )}
+    </div>
+  );
+};
+const CustomModal = ({ form, onSave, onClose }) => {
+  const { kind, item } = form;
+  const isFood = kind === "food";
+  const [d, setD] = useState(() => (item
+    ? (isFood
+      ? { name: item.id, biome: item.biome, hp: String(item.hp), st: String(item.st), eitr: String(item.eitr), min: String(Math.round(item.duration / 60)), regen: String(item.regen), station: item.station, ing: ingToText(item.ing) }
+      : { name: item.id, biome: item.biome, category: item.category, effect: item.effect, duration: String(item.duration), cooldown: String(item.cooldown), ing: ingToText(item.ing) })
+    : (isFood
+      ? { name: "", biome: "Meadows", hp: "0", st: "0", eitr: "0", min: "20", regen: "1", station: "Cauldron", ing: "" }
+      : { name: "", biome: "Meadows", category: "Utility", effect: "", duration: "600", cooldown: "600", ing: "" })));
+  const [err, setErr] = useState("");
+  const set = (k) => (e) => setD({ ...d, [k]: e.target.value });
+  const submit = (e) => {
+    e.preventDefault();
+    const problem = onSave(kind, { ...d, id: d.name, ing: parseIngText(d.ing) }, item ? item.id : null);
+    if (problem) setErr(problem); else onClose();
+  };
+  const lab = "flex min-w-0 flex-col gap-0.5 text-xs font-bold text-stone-300";
+  const inp = "w-full rounded-sm border border-stone-600 bg-stone-950 px-2 py-1.5 text-sm font-normal text-stone-100 placeholder:text-stone-600 disabled:opacity-60";
+  const numField = (k, label) => (
+    <label key={k} htmlFor={`c-${k}`} className={lab}>{label}
+      <input id={`c-${k}`} type="number" inputMode="numeric" min="0" max="9999" step="1" required value={d[k]} onChange={set(k)} className={`num ${inp}`} />
+    </label>
+  );
+  return (
+    <Modal labelId="custom-h" onClose={onClose}>
+      <ModalHead id="custom-h" eyebrow={item ? "Edit your custom item" : "Add your own"} title={isFood ? "Custom Food" : "Custom Mead"} onClose={onClose} closeLabel="Cancel" />
+      <p className="mt-2 flex items-start gap-2 text-sm text-pink-100"><CustomTag /><span>Saved on this device only and always marked as custom.</span></p>
+      <form onSubmit={submit} className="mt-3 flex flex-col gap-2.5">
+        <label htmlFor="c-name" className={lab}>Name
+          <input id="c-name" type="text" required maxLength={40} disabled={!!item} value={d.name} onChange={set("name")} placeholder={isFood ? "e.g. Troll Stew" : "e.g. Swamp Tonic"} className={inp} />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label htmlFor="c-biome" className={lab}>Biome
+            <select id="c-biome" value={d.biome} onChange={set("biome")} className={inp}>{BIOMES.map((b) => <option key={b} value={b}>{b}</option>)}</select>
+          </label>
+          {isFood ? (
+            <label htmlFor="c-station" className={lab}>Made at
+              <select id="c-station" value={d.station} onChange={set("station")} className={inp}>{FOOD_STATIONS.map((x) => <option key={x} value={x}>{x}</option>)}</select>
+            </label>
+          ) : (
+            <label htmlFor="c-category" className={lab}>Category
+              <select id="c-category" value={d.category} onChange={set("category")} className={inp}>{MEAD_CATS.map((x) => <option key={x} value={x}>{x}</option>)}</select>
+            </label>
+          )}
+        </div>
+        {isFood ? (
+          <div className="grid grid-cols-3 gap-2">
+            {numField("hp", "Health")}{numField("st", "Stamina")}{numField("eitr", "Eitr")}{numField("min", "Lasts (min)")}{numField("regen", "Regen / tick")}
+          </div>
+        ) : (
+          <>
+            <label htmlFor="c-effect" className={lab}>Effect
+              <input id="c-effect" type="text" required maxLength={90} value={d.effect} onChange={set("effect")} placeholder="e.g. Restores 100 health over 10s" className={inp} />
+            </label>
+            <div className="grid grid-cols-2 gap-2">{numField("duration", "Lasts (sec)")}{numField("cooldown", "Cooldown (sec)")}</div>
+          </>
+        )}
+        <label htmlFor="c-ing" className={lab}>Ingredients
+          <input id="c-ing" type="text" value={d.ing} onChange={set("ing")} placeholder="e.g. Honey 2, Carrot 1" className={inp} />
+          <span className="font-normal text-stone-500">Separate with commas. Put the amount after each name. Leave empty if there is no recipe.</span>
+        </label>
+        {err && <p role="alert" className="rounded-sm border border-red-800 bg-red-950/60 px-2 py-1 text-sm text-red-100">{err}</p>}
+        <button type="submit" className="rounded-sm border border-amber-600 bg-amber-500 px-3 py-2 font-bold text-stone-950 hover:bg-amber-400">{item ? "Save changes" : `Add custom ${kind}`}</button>
+      </form>
+    </Modal>
+  );
+};
+
+const FoodCard = ({ f, selected, full, picked, onToggle, onReplace, onStation, onIngredient, rank, onSaveEdit, onEditCustom, onDeleteCustom }) => {
   const [editing, setEditing] = useState(false);
   return (
     <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
       whileHover={{ y: -3 }} transition={{ duration: 0.18 }}
-      style={biomeCardStyle(f.biome)} className={`wood flex flex-col gap-2 rounded-sm p-3 ${selected ? "ring-2 ring-amber-500" : ""}`}>
+      style={biomeCardStyle(f.biome)} className={`wood flex flex-col gap-2 rounded-sm p-3 ${selected ? "ring-2 ring-amber-500" : ""} ${f.custom ? customOutline : ""}`}>
       <header className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="display text-xl leading-tight text-stone-100">{f.name}</h3>
-          <p className="mt-1 flex flex-wrap items-center gap-1.5"><BiomeTag biome={f.biome} /><FocusTag type={f.type} />{rank && <TrophyTag rank={rank} type={f.type} scope={`in ${f.biome}`} />}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-1.5">{f.custom && <CustomTag />}<BiomeTag biome={f.biome} /><FocusTag type={f.type} />{rank && <TrophyTag rank={rank} type={f.type} scope={`in ${f.biome}`} />}</p>
         </div>
         {selected || !full ? (
           <button onClick={() => onToggle(f.id)}
@@ -761,7 +934,7 @@ const FoodCard = ({ f, selected, full, picked, onToggle, onReplace, onStation, o
           </div>
         </>
       )}
-      <EditFooter item={f} editing={editing} onEdit={() => setEditing(true)} />
+      {f.custom ? <CustomFooter item={f} onEdit={() => onEditCustom({ kind: "food", item: f })} onDelete={() => onDeleteCustom(f.id)} /> : <EditFooter item={f} editing={editing} onEdit={() => setEditing(true)} />}
     </motion.article>
   );
 };
@@ -774,15 +947,15 @@ const Step = ({ Icon, title, children }) => (
     {children}
   </div>
 );
-const MeadCard = ({ m, onStation, onIngredient, onSaveEdit }) => {
+const MeadCard = ({ m, onStation, onIngredient, onSaveEdit, onEditCustom, onDeleteCustom }) => {
   const [editing, setEditing] = useState(false);
   return (
     <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
-      whileHover={{ y: -3 }} transition={{ duration: 0.18 }} style={biomeCardStyle(m.biome)} className="wood flex flex-col gap-3 rounded-sm p-3.5">
+      whileHover={{ y: -3 }} transition={{ duration: 0.18 }} style={biomeCardStyle(m.biome)} className={`wood flex flex-col gap-3 rounded-sm p-3.5 ${m.custom ? customOutline : ""}`}>
       <header className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="display text-xl leading-tight text-stone-100">{m.name}</h3>
-          <p className="mt-1"><BiomeTag biome={m.biome} /></p>
+          <p className="mt-1 flex flex-wrap items-center gap-1.5">{m.custom && <CustomTag />}<BiomeTag biome={m.biome} /></p>
         </div>
         <span className={`shrink-0 rounded-sm border px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider ${CAT[m.category]}`}>{m.category}</span>
       </header>
@@ -806,14 +979,17 @@ const MeadCard = ({ m, onStation, onIngredient, onSaveEdit }) => {
           </div>
         </>
       )}
-      <EditFooter item={m} editing={editing} onEdit={() => setEditing(true)} />
+      {m.custom ? <CustomFooter item={m} onEdit={() => onEditCustom({ kind: "mead", item: m })} onDelete={() => onDeleteCustom(m.id)} /> : <EditFooter item={m} editing={editing} onEdit={() => setEditing(true)} />}
     </motion.article>
   );
 };
 
 const btnQuiet = "flex items-center gap-1.5 rounded-sm border border-stone-600 px-2.5 py-1.5 text-sm font-bold text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-35";
 const btnMain = "flex items-center gap-1.5 rounded-sm border border-amber-600 bg-amber-500 px-3 py-1.5 text-sm font-bold text-stone-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:border-stone-700 disabled:bg-transparent disabled:text-stone-600";
-const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
+const MyPresets = ({ saved, setSaved, picked, slots, onLoad, foods }) => {
+  const ids = new Set(foods.map((f) => f.id));
+  const nameOf = (id) => { const f = foods.find((x) => x.id === id); return f ? f.name : titleCase(id); };
+  const [pending, setPending] = useState(null);
   const [name, setName] = useState("");
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -830,15 +1006,29 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
   };
   const importFrom = (raw) => {
     const r = fromCode("P", raw);
-    let list;
-    if (r.ok) list = cleanPresets((Array.isArray(r.ok) ? r.ok : []).map((a) => (Array.isArray(a) ? { name: a[0], foods: a.slice(1) } : null)));
+    let rows;
+    if (r.ok) rows = (Array.isArray(r.ok) ? r.ok : []).filter(Array.isArray).map((a) => ({ name: a[0], foods: a.slice(1) }));
     else if (r.found) { setMsg("That code is incomplete or damaged. Copy the whole code and paste it again."); return; }
     else if (/VHE1/i.test(raw)) { setMsg("That is a corrections code. Paste it into the Corrections panel instead."); return; }
-    else list = textToPresets(raw);
-    if (!list.length) { setMsg("No preset code found in that text. A preset code starts with VHP1."); return; }
-    const names = new Set(list.map((p) => p.name));
-    setSaved([...saved.filter((p) => !names.has(p.name)), ...list]);
-    setText(""); setMsg(`Added ${list.length} preset${list.length > 1 ? "s" : ""}. Presets with the same name were replaced.`);
+    else rows = textToPresets(raw);
+    let skipped = 0;
+    const list = rows.map((row) => {
+      const clean = cleanPresets([row], ids)[0];
+      if (!clean) { skipped++; return null; }
+      const existing = saved.find((p) => p.name === clean.name) || null;
+      return { name: clean.name, foods: clean.foods, missing: (Array.isArray(row.foods) ? row.foods : []).filter((id) => !ids.has(id)).length, existing,
+        same: !!existing && existing.foods.join("|") === clean.foods.join("|") };
+    }).filter(Boolean);
+    if (!list.length) { setMsg(skipped ? "Those presets only use foods you do not have, such as a friend's custom foods. Ask for their corrections code first." : "No preset code found in that text. A preset code starts with VHP1."); return; }
+    setPending({ list, skipped }); setMsg("");
+  };
+  const applyPending = () => {
+    const todo = pending.list.filter((p) => !p.same);
+    const names = new Set(todo.map((p) => p.name));
+    setSaved([...saved.filter((p) => !names.has(p.name)), ...todo.map((p) => ({ name: p.name, foods: p.foods }))]);
+    const added = todo.filter((p) => !p.existing).length, replaced = todo.length - added;
+    setMsg(`Done: ${added} preset${added === 1 ? "" : "s"} added, ${replaced} replaced.`);
+    setPending(null); setText("");
   };
   const copy = () => {
     const fail = () => { setOpen(true); setMsg("Copying is blocked here. Select the text in the box below and copy it by hand."); };
@@ -868,9 +1058,9 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
               return (
                 <motion.li key={p.name} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
                   className={`wood flex min-w-0 items-stretch rounded-sm ${active ? "ring-2 ring-amber-500" : ""}`}>
-                  <button onClick={() => onLoad(p.foods)} title={p.foods.join(", ")} className="min-w-0 px-2.5 py-1.5 text-left hover:text-amber-300">
+                  <button onClick={() => onLoad(p.foods)} title={p.foods.map(nameOf).join(", ")} className="min-w-0 px-2.5 py-1.5 text-left hover:text-amber-300">
                     <span className="block break-words font-bold leading-tight text-stone-100">{p.name}</span>
-                    <span className="block break-words text-xs text-stone-400">{p.foods.join(" · ")}</span>
+                    <span className="block break-words text-xs text-stone-400">{p.foods.map(nameOf).join(" · ")}</span>
                   </button>
                   <button onClick={() => { setSaved(saved.filter((x) => x.name !== p.name)); setMsg(`Deleted "${p.name}".`); }} aria-label={`Delete preset ${p.name}`}
                     className="flex shrink-0 items-center gap-1 border-l border-red-900 bg-red-950/60 px-2 text-xs font-bold text-red-200 transition-colors hover:bg-red-600 hover:text-white"><X size={13} aria-hidden="true" />Delete</button>
@@ -907,7 +1097,21 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
                 <label htmlFor="preset-import" className="sr-only">Paste preset text</label>
                 <textarea id="preset-import" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste preset code here" rows={5}
                   className="w-full break-all rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-200 placeholder:text-stone-600" />
-                <button type="button" onClick={() => importFrom(text)} disabled={!text.trim()} className={`${btnQuiet} w-fit`}><Plus size={15} aria-hidden="true" />Add pasted presets</button>
+                <button type="button" onClick={() => importFrom(text)} disabled={!text.trim()} className={`${btnQuiet} w-fit`}><Plus size={15} aria-hidden="true" />Check pasted presets</button>
+                {pending && (
+                  <Review title={`This code contains ${pending.list.length} preset${pending.list.length === 1 ? "" : "s"}`} applyLabel="Add these presets"
+                    onApply={pending.list.some((p) => !p.same) ? applyPending : null} onCancel={() => setPending(null)}>
+                    {pending.list.map((p) => (
+                      <li key={p.name}>
+                        <ReviewTag kind={p.same ? "Same" : p.existing ? "Replaces" : "New"} /><strong>{p.name}</strong>: {p.foods.map(nameOf).join(", ")}
+                        {p.existing && !p.same && <span className="block text-xs text-stone-400">Your current "{p.name}": {p.existing.foods.map(nameOf).join(", ")}</span>}
+                        {p.same && <span className="block text-xs text-stone-400">You already have this exact preset. It will be left alone.</span>}
+                        {p.missing > 0 && <span className="block text-xs text-pink-200">{p.missing} food{p.missing === 1 ? "" : "s"} left out because you do not have {p.missing === 1 ? "it" : "them"}, probably a friend's custom food.</span>}
+                      </li>
+                    ))}
+                    {pending.skipped > 0 && <li className="text-xs text-pink-200">{pending.skipped} more preset{pending.skipped === 1 ? "" : "s"} skipped: every food in {pending.skipped === 1 ? "it is" : "them is"} missing from your list.</li>}
+                  </Review>
+                )}
               </div>
               <div className="flex min-w-0 flex-col gap-2">
                 <h3 className="font-bold text-stone-100">Your preset share code</h3>
@@ -925,7 +1129,9 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
   );
 };
 
-const EditsPanel = ({ edits, setEdits }) => {
+const EditsPanel = ({ edits, setEdits, custom, setCustom, onClearCustom }) => {
+  const [pending, setPending] = useState(null);
+  const nc = custom.foods.length + custom.meads.length;
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
@@ -934,8 +1140,8 @@ const EditsPanel = ({ edits, setEdits }) => {
   const ids = Object.keys(edits);
   const n = ids.length;
   const biomeOf = (id) => { const hit = ITEM_BY_NORM.get(normName(id)); return hit ? hit.item.biome : null; };
-  const countFor = (b) => (b === "All" ? n : ids.filter((id) => biomeOf(id) === b).length);
-  const exportText = toCode("E", edits);
+  const countFor = (b) => (b === "Custom" ? nc : b === "All" ? n : ids.filter((id) => biomeOf(id) === b).length);
+  const exportText = toCode("E", { e: edits, c: packCustom(custom) });
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
   const copy = () => {
     const fail = () => setMsg("Copying is blocked here. Select the text in the box and copy it by hand.");
@@ -947,16 +1153,37 @@ const EditsPanel = ({ edits, setEdits }) => {
   };
   const add = () => {
     const r = fromCode("E", text);
-    let got;
-    if (r.ok) got = cleanEdits(r.ok);
+    let data;
+    if (r.ok) data = r.ok;
     else if (r.found) { setMsg("That code is incomplete or damaged. Copy the whole code and paste it again."); return; }
     else if (/VHP1/i.test(text)) { setMsg("That is a preset code. Paste it under My presets instead."); return; }
-    else got = textToEdits(text);
-    const k = Object.keys(got).length;
-    if (!k) { setMsg("No corrections code found in that text. A corrections code starts with VHE1."); return; }
-    setEdits({ ...edits, ...got }); setText(""); setMsg(`Added corrections for ${k} item${k > 1 ? "s" : ""}.`);
+    else data = textToEdits(text);
+    const wrapped = data && typeof data === "object" && ((data.e && typeof data.e === "object") || (data.c && typeof data.c === "object"));
+    const got = cleanEdits(wrapped ? data.e : data);
+    const inc = cleanCustom(wrapped ? data.c : null);
+    const mine = [...custom.foods, ...custom.meads];
+    const editPlan = planEdits(got, edits);
+    const customPlan = [...inc.foods, ...inc.meads].map((x) => {
+      const old = mine.find((y) => normName(y.id) === normName(x.id)) || null;
+      return { item: x, kind: x.effect != null ? "mead" : "food", old, same: !!old && JSON.stringify(old) === JSON.stringify(x) };
+    });
+    if (!editPlan.length && !customPlan.length) { setMsg("No corrections code found in that text. A corrections code starts with VHE1."); return; }
+    setPending({ got, inc, editPlan, customPlan }); setMsg("");
+  };
+  const pendingHasWork = pending && (pending.editPlan.some((x) => x.changes.length) || pending.customPlan.some((x) => !x.same));
+  const applyPending = () => {
+    setEdits({ ...edits, ...pending.got });
+    if (pending.customPlan.length) {
+      const names = new Set(pending.customPlan.map((x) => normName(x.item.id)));
+      const keep = (list) => list.filter((x) => !names.has(normName(x.id)));
+      setCustom(cleanCustom(packCustom({ foods: [...keep(custom.foods), ...pending.inc.foods], meads: [...keep(custom.meads), ...pending.inc.meads] })));
+    }
+    const a = pending.editPlan.filter((x) => x.changes.length).length, b = pending.customPlan.filter((x) => !x.same).length;
+    setMsg(`Done: ${a} item${a === 1 ? "" : "s"} corrected, ${b} custom item${b === 1 ? "" : "s"} added or updated.`);
+    setPending(null); setText("");
   };
   const doReset = () => {
+    if (target === "Custom") { onClearCustom(); setConfirm(false); setMsg("All custom foods and meads deleted."); return; }
     if (target === "All") setEdits({});
     else { const next = {}; ids.forEach((id) => { if (biomeOf(id) !== target) next[id] = edits[id]; }); setEdits(next); }
     setConfirm(false); setMsg(target === "All" ? "Every figure is back to default." : `${target} figures are back to default.`);
@@ -966,15 +1193,15 @@ const EditsPanel = ({ edits, setEdits }) => {
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-left hover:text-amber-300">
         <Pencil size={15} className="text-amber-500" aria-hidden="true" />
         <span id="fix-h" className="font-bold text-stone-100">Corrections: edit any figure</span>
-        <span className="text-sm text-stone-400">{n ? `${n} item${n > 1 ? "s" : ""} edited by you` : "Spotted a wrong number? Press the Edit figures button on any card."}</span>
+        <span className="text-sm text-stone-400">{n || nc ? `${n} item${n === 1 ? "" : "s"} edited by you, ${nc} custom item${nc === 1 ? "" : "s"} added` : "Spotted a wrong number? Press the Edit figures button on any card."}</span>
         <Chevron size={16} className={`ml-auto transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
       </button>
       {open && (
         <div className="flex flex-col gap-4 border-t border-stone-700 p-3">
           <p className="flex max-w-prose items-start gap-2 text-sm text-stone-300"><Lock size={14} className="mt-0.5 text-amber-400" aria-hidden="true" /><span>Your edits are saved on this device only. They change the figures everywhere on this page for you, and for nobody else, unless you send your share code and they add it.</span></p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={copy} disabled={!n} className={btnMain}><Copy size={15} aria-hidden="true" />Copy to clipboard</button>
-            {canShare && <button type="button" onClick={share} disabled={!n} className={btnMain}><Share size={15} aria-hidden="true" />Share to apps</button>}
+            <button type="button" onClick={copy} disabled={!n && !nc} className={btnMain}><Copy size={15} aria-hidden="true" />Copy to clipboard</button>
+            {canShare && <button type="button" onClick={share} disabled={!n && !nc} className={btnMain}><Share size={15} aria-hidden="true" />Share to apps</button>}
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-2">
@@ -982,19 +1209,39 @@ const EditsPanel = ({ edits, setEdits }) => {
               <label htmlFor="edits-import" className="sr-only">Paste corrections text</label>
               <textarea id="edits-import" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste corrections code here (starts with VHE1)" rows={4}
                 className="w-full break-all rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-200 placeholder:text-stone-600" />
-              <button type="button" onClick={add} disabled={!text.trim()} className={`${btnQuiet} w-fit`}><Plus size={15} aria-hidden="true" />Add pasted corrections</button>
+              <button type="button" onClick={add} disabled={!text.trim()} className={`${btnQuiet} w-fit`}><Plus size={15} aria-hidden="true" />Check pasted corrections</button>
+              {pending && (
+                <Review title="This code would make these changes" applyLabel="Apply these changes" onApply={pendingHasWork ? applyPending : null} onCancel={() => setPending(null)}>
+                  {pending.editPlan.map((x) => (
+                    <li key={x.id}>
+                      <ReviewTag kind={x.changes.length ? "Changes" : "Same"} /><strong>{x.name}</strong>
+                      {x.changes.length ? <span className="num block text-xs text-stone-300">{x.changes.join(" · ")}</span> : <span className="block text-xs text-stone-400">Already matches what you have.</span>}
+                      {x.overwrites && x.changes.length > 0 && <span className="block text-xs text-amber-300">This replaces your own edit of {x.name}.</span>}
+                    </li>
+                  ))}
+                  {pending.customPlan.map((x) => (
+                    <li key={"c-" + x.item.id}>
+                      <ReviewTag kind={x.same ? "Same" : x.old ? "Replaces" : "New"} /><CustomTag small /> <strong>{x.item.name}</strong> <span className="text-xs text-stone-400">({x.kind}, {x.item.biome})</span>
+                      <span className="num block text-xs text-stone-300">{describeCustom(x.item)}{x.item.ing.length ? ` Needs ${x.item.ing.map(([n, q]) => `${q}× ${titleCase(n)}`).join(", ")}.` : ""}</span>
+                      {x.old && !x.same && <span className="block text-xs text-amber-300">This replaces your own custom {x.kind} of the same name.</span>}
+                    </li>
+                  ))}
+                </Review>
+              )}
             </div>
             <div className="flex min-w-0 flex-col gap-2">
-              <h3 className="font-bold text-stone-100">Your corrections share code</h3>
+              <h3 className="font-bold text-stone-100">Your share code</h3>
+              <p className="text-sm text-stone-400">Carries your edited figures and your custom foods and meads together.</p>
               <label htmlFor="edits-export" className="sr-only">Your corrections as text</label>
-              <textarea id="edits-export" readOnly value={n ? exportText : ""} placeholder="Edit a figure and its code appears here." rows={4} onFocus={(e) => e.target.select()}
+              <textarea id="edits-export" readOnly value={n || nc ? exportText : ""} placeholder="Edit a figure or add a custom item and the code appears here." rows={4} onFocus={(e) => e.target.select()}
                 className="w-full break-all rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-300 placeholder:text-stone-600" />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 border-t border-stone-700 pt-3">
             <label htmlFor="edits-reset" className="text-sm font-bold text-stone-200">Reset to default</label>
             <select id="edits-reset" value={target} onChange={(e) => { setTarget(e.target.value); setConfirm(false); }} className="rounded-sm border border-stone-700 px-2 py-1.5 text-sm text-stone-100">
-              <option value="All">Everything ({n})</option>
+              <option value="All">All edited figures ({n})</option>
+              <option value="Custom">Delete all custom items ({nc})</option>
               {BIOMES.map((b) => <option key={b} value={b}>{b} ({countFor(b)})</option>)}
             </select>
             {confirm ? (
@@ -1018,8 +1265,11 @@ const EditsPanel = ({ edits, setEdits }) => {
 function App() {
   const [edits, setEdits] = useState(loadEdits);
   useEffect(() => { try { localStorage.setItem(EDIT_KEY, JSON.stringify(edits)); } catch (e) {} }, [edits]);
-  const foodsAll = useMemo(() => FOODS.map((f) => withEdits(f, edits[f.id], true)), [edits]);
-  const meadsAll = useMemo(() => MEADS.map((m) => withEdits(m, edits[m.id], false)), [edits]);
+  const [custom, setCustom] = useState(loadCustom);
+  useEffect(() => { try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(packCustom(custom))); } catch (e) {} }, [custom]);
+  const [customForm, setCustomForm] = useState(null);
+  const foodsAll = useMemo(() => [...FOODS.map((f) => withEdits(f, edits[f.id], true)), ...custom.foods], [edits, custom]);
+  const meadsAll = useMemo(() => [...MEADS.map((m) => withEdits(m, edits[m.id], false)), ...custom.meads], [edits, custom]);
   const saveEdit = (id, patch) => setEdits((prev) => { const next = { ...prev }; delete next[id]; return patch ? { ...next, ...cleanEdits({ [id]: patch }) } : next; });
   const [ingredient, setIngredient] = useState(null);
   const [news, setNews] = useState(() => { const seen = lastSeenUpdate(); return seen < LATEST ? { since: seen } : null; });
@@ -1034,7 +1284,23 @@ function App() {
   const [sort, setSort] = useState("progression");
   const [showList, setShowList] = useState(false);
   const [station, setStation] = useState(null);
-  const [saved, setSaved] = useState(loadSaved);
+  const [saved, setSaved] = useState(() => loadSaved(new Set([...FOOD_IDS, ...custom.foods.map((f) => f.id)])));
+  // Returns a message when the name cannot be used, otherwise saves and returns null.
+  const saveCustom = (kind, raw, editingId) => {
+    const key = kind === "food" ? "foods" : "meads";
+    const packed = packCustom(custom);
+    const at = packed[key].findIndex((x) => x.id === editingId);
+    if (at >= 0) packed[key][at] = { ...raw, id: editingId }; else packed[key].push(raw);
+    const next = cleanCustom(packed);
+    if (next[key].length !== packed[key].length) return "That name is empty or already used by another food or mead. Pick a different name.";
+    setCustom(next); return null;
+  };
+  const dropFoods = (gone) => {
+    setSlots((sl) => sl.filter((id) => !gone.has(id)));
+    setSaved((list) => list.map((p) => ({ name: p.name, foods: p.foods.filter((id) => !gone.has(id)) })).filter((p) => p.foods.length));
+  };
+  const deleteCustom = (id) => { setCustom({ foods: custom.foods.filter((x) => x.id !== id), meads: custom.meads.filter((x) => x.id !== id) }); dropFoods(new Set([id])); };
+  const clearCustom = () => { dropFoods(new Set(custom.foods.map((f) => f.id))); setCustom(cleanCustom(null)); };
   useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(saved)); } catch (e) {} }, [saved]);
 
   const picked = slots.map((id) => foodsAll.find((f) => f.id === id)).filter(Boolean);
@@ -1046,9 +1312,9 @@ function App() {
   };
   const shopping = useMemo(() => {
     const map = new Map();
-    picked.forEach((f) => (f.ing.length ? f.ing : [[f.name, 1]]).forEach(([n, qty]) => map.set(n, (map.get(n) || 0) + qty)));
+    picked.forEach((f) => (f.ing.length ? f.ing : [[f.id, 1]]).forEach(([n, qty]) => map.set(n, (map.get(n) || 0) + qty)));
     return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  }, [slots.join("|"), edits]);
+  }, [slots.join("|"), edits, custom]);
 
   const replaceAt = (i, id) => setSlots((s) => s.map((x, j) => (j === i ? id : x)));
   const toggle = (id) => setSlots((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length < 3 ? [...s, id] : s));
@@ -1075,7 +1341,7 @@ function App() {
           <p className="mt-1 max-w-prose text-lg text-stone-400">Fill three plates, read your health, stamina and eitr before you leave the hall, and see what to gather.</p>
           <p className="mt-3 flex max-w-prose items-start gap-2 rounded-sm border border-amber-700/80 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">
             <Lock size={16} className="mt-0.5 text-amber-400" aria-hidden="true" />
-            <span><strong>Your changes stay on this device.</strong> Presets and edited figures are saved in this browser only. Nobody else sees them unless you send them a share code.</span>
+            <span><strong>Your changes stay on this device.</strong> Presets, edited figures and custom foods are saved in this browser only. Nobody else sees them unless you send them a share code.</span>
           </p>
 
           <section aria-labelledby="presets-h" className="mt-5">
@@ -1097,7 +1363,7 @@ function App() {
               ))}
             </div>
           </section>
-          <MyPresets saved={saved} setSaved={setSaved} picked={picked} slots={slots} onLoad={setSlots} />
+          <MyPresets saved={saved} setSaved={setSaved} picked={picked} slots={slots} onLoad={setSlots} foods={foodsAll} />
         </header>
 
         {/* Sticky meal builder */}
@@ -1112,7 +1378,7 @@ function App() {
                     {f ? (
                       <motion.div key={f.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.15 }} className="flex min-w-0 flex-1 flex-col gap-1.5">
                         <div className="flex items-start justify-between gap-1.5">
-                          <p className="min-w-0 break-words text-sm font-bold leading-tight text-stone-100 sm:text-base"><Fork type={f.type} size={14} /> {f.name}</p>
+                          <p className="min-w-0 break-words text-sm font-bold leading-tight text-stone-100 sm:text-base"><Fork type={f.type} size={14} /> {f.name}{f.custom && <> <CustomTag small /></>}</p>
                           <button onClick={() => toggle(f.id)} aria-label={`Remove ${f.name} from plate ${i + 1}`}
                             className="flex shrink-0 items-center gap-1 rounded-sm border border-red-800 bg-red-950/60 px-1.5 py-0.5 text-xs font-bold text-red-200 transition-colors hover:bg-red-600 hover:text-white">
                             <X size={13} aria-hidden="true" /><span className="hidden sm:inline">Remove</span>
@@ -1151,7 +1417,7 @@ function App() {
                   {shopping.length ? (
                     <>
                       <ul className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3 lg:grid-cols-4">
-                        {shopping.map(([n, qty]) => <li key={n} className="flex items-baseline gap-2 text-stone-200"><span className="num w-8 shrink-0 text-right font-bold text-amber-400">{qty}×</span><button type="button" onClick={() => setIngredient(n)} title={`Where to get ${n}`} className={`min-w-0 ${ingBtn}`}>{n}</button></li>)}
+                        {shopping.map(([n, qty]) => <li key={n} className="flex items-baseline gap-2 text-stone-200"><span className="num w-8 shrink-0 text-right font-bold text-amber-400">{qty}×</span><button type="button" onClick={() => setIngredient(n)} title={`Where to get ${n}`} className={`min-w-0 ${ingBtn}`}>{titleCase(n)}</button></li>)}
                       </ul>
                       <p className="mt-2 text-sm text-stone-500">Raw ingredients for one craft of each recipe. Base stats without food are 25 health and 50 stamina.</p>
                     </>
@@ -1188,6 +1454,13 @@ function App() {
               </select>
             </label>
           </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => setCustomForm({ kind: tab === "foods" ? "food" : "mead", item: null })}
+              className="flex items-center gap-1.5 rounded-sm border border-pink-400 px-2.5 py-1.5 text-sm font-bold text-pink-200 transition-colors hover:bg-pink-400 hover:text-stone-950">
+              <Plus size={15} aria-hidden="true" />Add custom {tab === "foods" ? "food" : "mead"}
+            </button>
+            <span className="text-sm text-stone-400">Missing something? Add your own. It is saved on this device and always marked <CustomTag small />.</span>
+          </div>
           <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Biome filter">
             {["All", ...BIOMES].map((b) => <Pill key={b} active={biome === b} onClick={() => setBiome(b)}><span className="inline-flex items-center gap-1.5">{b !== "All" && <span className="h-2 w-2 rounded-full ring-1 ring-black/40" style={{ backgroundColor: BIOME_HEX[b] }} aria-hidden="true" />}{b === "All" ? "All biomes" : b}</span></Pill>)}
           </div>
@@ -1197,7 +1470,7 @@ function App() {
               : ["All", "Healing", "Stamina", "Resistance", "Utility"].map((t) => <Pill key={t} active={cat === t} onClick={() => setCat(t)}>{t === "All" ? "Any category" : t}</Pill>)}
           </div>
 
-          <EditsPanel edits={edits} setEdits={setEdits} />
+          <EditsPanel edits={edits} setEdits={setEdits} custom={custom} setCustom={setCustom} onClearCustom={clearCustom} />
           {tab === "foods" && (
             <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-400">
               <span>Fork colour shows the focus:</span>
@@ -1215,8 +1488,8 @@ function App() {
             <div className={`mt-3 grid gap-3 ${tab === "foods" ? "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" : "lg:grid-cols-2"}`}>
               <AnimatePresence mode="popLayout" initial={false}>
                 {tab === "foods"
-                  ? foods.map((f) => <FoodCard key={f.id} f={f} selected={slots.includes(f.id)} full={slots.length >= 3} picked={picked} onToggle={toggle} onReplace={replaceAt} onStation={setStation} onIngredient={setIngredient} rank={ranks[f.id]} onSaveEdit={saveEdit} />)
-                  : meads.map((m) => <MeadCard key={m.id} m={m} onStation={setStation} onIngredient={setIngredient} onSaveEdit={saveEdit} />)}
+                  ? foods.map((f) => <FoodCard key={f.id} f={f} selected={slots.includes(f.id)} full={slots.length >= 3} picked={picked} onToggle={toggle} onReplace={replaceAt} onStation={setStation} onIngredient={setIngredient} rank={ranks[f.id]} onSaveEdit={saveEdit} onEditCustom={setCustomForm} onDeleteCustom={deleteCustom} />)
+                  : meads.map((m) => <MeadCard key={m.id} m={m} onStation={setStation} onIngredient={setIngredient} onSaveEdit={saveEdit} onEditCustom={setCustomForm} onDeleteCustom={deleteCustom} />)}
               </AnimatePresence>
             </div>
           )}
@@ -1224,7 +1497,8 @@ function App() {
 
         <AnimatePresence>{station && <StationModal key="station" open={station} onClose={() => setStation(null)} />}</AnimatePresence>
         <AnimatePresence>{ingredient && <IngredientModal key="ingredient" name={ingredient} foods={foodsAll} onPick={setIngredient} onClose={() => setIngredient(null)} />}</AnimatePresence>
-        <AnimatePresence>{news && !station && !ingredient && <NewsModal key="news" since={news.since} onClose={closeNews} />}</AnimatePresence>
+        <AnimatePresence>{customForm && <CustomModal key={"custom-" + customForm.kind + (customForm.item ? customForm.item.id : "")} form={customForm} onSave={saveCustom} onClose={() => setCustomForm(null)} />}</AnimatePresence>
+        <AnimatePresence>{news && !station && !ingredient && !customForm && <NewsModal key="news" since={news.since} onClose={closeNews} />}</AnimatePresence>
 
         <footer className="mt-10 border-t border-stone-800 pt-4 text-sm text-stone-500">
           <p className="max-w-prose">Stats follow the community wiki. Ashlands recipe quantities and regen ticks, and the Deep North entries from the 1.0 launch guides, are the least certain, so check them in game before a long farming trip. Station build costs come from memory and guides, so treat them as a guide too. Feasts and the Bog Witch utility brews are not listed.</p>
