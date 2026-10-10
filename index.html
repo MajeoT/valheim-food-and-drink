@@ -52,7 +52,7 @@ const Heart = icon("Heart"), Zap = icon("Zap"), Sparkles = icon("Sparkles"), Sea
   Utensils = icon("Utensils"), Basket = icon("ShoppingBasket"), Chevron = icon("ChevronDown"),
   Shield = icon("Shield"), Compass = icon("Compass"), Wand = icon("Wand2"), Scale = icon("Scale"),
   Arrow = icon("ArrowRight"), Beer = icon("Beer"), Trash = icon("Trash2"), Hourglass = icon("Hourglass"),
-  Activity = icon("Activity"), Timer = icon("Timer"), Flame = icon("Flame"), Info = icon("Info"), Hammer = icon("Hammer");
+  Activity = icon("Activity"), Timer = icon("Timer"), Save = icon("Save"), Download = icon("Download"), Upload = icon("Upload"), Copy = icon("Copy"), Share = icon("Share2"), Flame = icon("Flame"), Info = icon("Info"), Hammer = icon("Hammer");
 
 /* ───────── Data ───────── */
 const BIOMES = ["Meadows", "Black Forest", "Swamps", "Mountain", "Plains", "Mistlands", "Ashlands", "Deep North"];
@@ -224,6 +224,14 @@ const buildPreset = (pick, tier) => {
   });
   return chosen;
 };
+
+/* ───────── Saved presets (this browser only) ───────── */
+const LS_KEY = "valheim-planner-presets";
+const cleanPresets = (arr) => Array.isArray(arr) ? arr.map((p) => ({
+  name: String((p && p.name) || "").trim().slice(0, 40),
+  foods: (p && Array.isArray(p.foods) ? p.foods : []).filter((id, i, a) => FOODS.some((f) => f.id === id) && a.indexOf(id) === i).slice(0, 3),
+})).filter((p) => p.name && p.foods.length) : [];
+const loadSaved = () => { try { return cleanPresets(JSON.parse(localStorage.getItem(LS_KEY) || "[]")); } catch (e) { return []; } };
 
 /* ───────── Small pieces ───────── */
 const STAT = {
@@ -404,6 +412,125 @@ const MeadCard = ({ m, onStation }) => (
   </motion.article>
 );
 
+const btnQuiet = "flex items-center gap-1.5 rounded-sm border border-stone-600 px-2.5 py-1.5 text-sm font-bold text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-35";
+const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
+  const [name, setName] = useState("");
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [msg, setMsg] = useState("");
+  const exportText = JSON.stringify({ app: "valheim-mead-feast-planner", version: 1, presets: saved }, null, 2);
+  const save = (e) => {
+    e.preventDefault();
+    if (!picked.length) return;
+    const n = name.trim().slice(0, 40) || `Meal ${saved.length + 1}`;
+    setSaved([...saved.filter((p) => p.name !== n), { name: n, foods: picked.map((f) => f.id) }]);
+    setName(""); setMsg(`Saved "${n}" in this browser.`);
+  };
+  const importFrom = (raw) => {
+    try {
+      const data = JSON.parse(raw);
+      const list = cleanPresets(Array.isArray(data) ? data : data && data.presets);
+      if (!list.length) { setMsg("No presets found in that. Use the full text from a preset file."); return; }
+      const names = new Set(list.map((p) => p.name));
+      setSaved([...saved.filter((p) => !names.has(p.name)), ...list]);
+      setText(""); setMsg(`Imported ${list.length} preset${list.length > 1 ? "s" : ""}. Presets with the same name were replaced.`);
+    } catch (e) { setMsg("That is not a valid preset file. It should start with { and end with }."); }
+  };
+  const onFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => importFrom(String(r.result));
+    r.onerror = () => setMsg("Could not read that file. Try pasting its text instead.");
+    r.readAsText(file); e.target.value = "";
+  };
+  const download = () => {
+    try {
+      const url = URL.createObjectURL(new Blob([exportText], { type: "application/json" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = "valheim-meal-presets.json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setMsg("Download started: valheim-meal-presets.json. If nothing arrives, use Copy text instead.");
+    } catch (e) { setMsg("Downloads are blocked here. Use Copy text instead."); }
+  };
+  const copy = () => {
+    const fail = () => setMsg("Copying is blocked here. Select the text in the box and copy it by hand.");
+    try { navigator.clipboard.writeText(exportText).then(() => setMsg("Copied. Paste it into a message to send your presets."), fail); } catch (e) { fail(); }
+  };
+  return (
+    <section aria-labelledby="mine-h" className="mt-5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h2 id="mine-h" className="text-xs font-bold uppercase tracking-widest text-stone-400">My presets</h2>
+        <span className="text-sm text-stone-500">saved in this browser only</span>
+      </div>
+      <form onSubmit={save} className="mt-2 flex flex-wrap gap-2">
+        <label htmlFor="preset-name" className="sr-only">Preset name</label>
+        <input id="preset-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="Name the meal on your plates"
+          className="min-w-[12rem] flex-1 rounded-sm border border-stone-700 bg-stone-950/60 px-3 py-1.5 text-stone-100 placeholder:text-stone-500 sm:max-w-xs" />
+        <button type="submit" disabled={!picked.length} className="flex items-center gap-1.5 rounded-sm border border-amber-600 bg-amber-500 px-3 py-1.5 text-sm font-bold text-stone-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:border-stone-700 disabled:bg-transparent disabled:text-stone-600">
+          <Save size={15} aria-hidden="true" />Save plates as preset
+        </button>
+        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className={btnQuiet}>
+          <Share size={15} aria-hidden="true" />Share or import
+          <Chevron size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
+        </button>
+      </form>
+      {saved.length ? (
+        <ul className="mt-2 flex flex-wrap gap-2">
+          <AnimatePresence initial={false}>
+            {saved.map((p) => {
+              const active = p.foods.length === slots.length && p.foods.every((id) => slots.includes(id));
+              return (
+                <motion.li key={p.name} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+                  className={`wood flex min-w-0 items-stretch rounded-sm ${active ? "ring-2 ring-amber-500" : ""}`}>
+                  <button onClick={() => onLoad(p.foods)} title={p.foods.join(", ")} className="min-w-0 px-2.5 py-1.5 text-left hover:text-amber-300">
+                    <span className="block break-words font-bold leading-tight text-stone-100">{p.name}</span>
+                    <span className="block break-words text-xs text-stone-400">{p.foods.join(" · ")}</span>
+                  </button>
+                  <button onClick={() => { setSaved(saved.filter((x) => x.name !== p.name)); setMsg(`Deleted "${p.name}".`); }} aria-label={`Delete preset ${p.name}`}
+                    className="flex shrink-0 items-center border-l border-stone-700 px-2 text-stone-400 hover:bg-red-950/60 hover:text-red-300"><Trash size={14} aria-hidden="true" /></button>
+                </motion.li>
+              );
+            })}
+          </AnimatePresence>
+        </ul>
+      ) : <p className="mt-2 text-sm text-stone-500">No presets yet. Fill your plates, give the meal a name and save it.</p>}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+            <div className="wood mt-3 grid gap-4 rounded-sm p-3 md:grid-cols-2">
+              <div className="flex min-w-0 flex-col gap-2">
+                <h3 className="font-bold text-stone-100">Send your presets</h3>
+                <p className="text-sm text-stone-400">Download them as a file, or copy the text and paste it into a message.</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={download} disabled={!saved.length} className={btnQuiet}><Download size={15} aria-hidden="true" />Download file</button>
+                  <button type="button" onClick={copy} disabled={!saved.length} className={btnQuiet}><Copy size={15} aria-hidden="true" />Copy text</button>
+                </div>
+                <label htmlFor="preset-export" className="sr-only">Your presets as text</label>
+                <textarea id="preset-export" readOnly value={saved.length ? exportText : ""} placeholder="Save a preset and its text appears here." rows={5} onFocus={(e) => e.target.select()}
+                  className="num w-full rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-300 placeholder:text-stone-600" />
+              </div>
+              <div className="flex min-w-0 flex-col gap-2">
+                <h3 className="font-bold text-stone-100">Add presets from someone else</h3>
+                <p className="text-sm text-stone-400">Choose a preset file, or paste its text below.</p>
+                <label htmlFor="preset-file" className={`${btnQuiet} w-fit cursor-pointer`}><Upload size={15} aria-hidden="true" />Choose file
+                  <input id="preset-file" type="file" accept=".json,application/json,text/plain" onChange={onFile} className="sr-only" />
+                </label>
+                <label htmlFor="preset-import" className="sr-only">Paste preset text</label>
+                <textarea id="preset-import" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste preset text here" rows={5}
+                  className="w-full rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-200 placeholder:text-stone-600" />
+                <button type="button" onClick={() => importFrom(text)} disabled={!text.trim()} className={`${btnQuiet} w-fit`}><Plus size={15} aria-hidden="true" />Add pasted presets</button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <p role="status" aria-live="polite" className="mt-2 min-h-[1.25rem] text-sm text-amber-300">{msg}</p>
+    </section>
+  );
+};
+
 /* ───────── App ───────── */
 function App() {
   const [slots, setSlots] = useState(() => buildPreset(["hp", "st", "eitr"], 7));
@@ -416,6 +543,8 @@ function App() {
   const [sort, setSort] = useState("progression");
   const [showList, setShowList] = useState(false);
   const [station, setStation] = useState(null);
+  const [saved, setSaved] = useState(loadSaved);
+  useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(saved)); } catch (e) {} }, [saved]);
 
   const picked = slots.map((id) => FOODS.find((f) => f.id === id)).filter(Boolean);
   const totals = {
@@ -471,6 +600,7 @@ function App() {
               ))}
             </div>
           </section>
+          <MyPresets saved={saved} setSaved={setSaved} picked={picked} slots={slots} onLoad={setSlots} />
         </header>
 
         {/* Sticky meal builder */}
