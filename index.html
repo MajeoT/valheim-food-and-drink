@@ -52,12 +52,14 @@ const Heart = icon("Heart"), Zap = icon("Zap"), Sparkles = icon("Sparkles"), Sea
   Utensils = icon("Utensils"), Basket = icon("ShoppingBasket"), Chevron = icon("ChevronDown"),
   Shield = icon("Shield"), Compass = icon("Compass"), Wand = icon("Wand2"), Scale = icon("Scale"),
   Arrow = icon("ArrowRight"), Beer = icon("Beer"), Trash = icon("Trash2"), Hourglass = icon("Hourglass"),
-  Activity = icon("Activity"), Timer = icon("Timer"), Save = icon("Save"), Download = icon("Download"), Upload = icon("Upload"), Copy = icon("Copy"), Share = icon("Share2"), Flame = icon("Flame"), Info = icon("Info"), Hammer = icon("Hammer");
+  Activity = icon("Activity"), Timer = icon("Timer"), Save = icon("Save"), Copy = icon("Copy"), Share = icon("Share2"), Flame = icon("Flame"), Info = icon("Info"), Hammer = icon("Hammer");
 
 /* ───────── Data ───────── */
 const BIOMES = ["Meadows", "Black Forest", "Swamps", "Mountain", "Plains", "Mistlands", "Ashlands", "Deep North"];
 const BIOME_TINT = { "Deep North": "text-cyan-200", Meadows: "text-lime-300", "Black Forest": "text-emerald-300", Swamps: "text-teal-300",
   Mountain: "text-sky-200", Plains: "text-amber-200", Mistlands: "text-violet-300", Ashlands: "text-orange-400" };
+const BIOME_HEX = { Meadows: "#a3e635", "Black Forest": "#22a06b", Swamps: "#b08d57", Mountain: "#cbd5e1", Plains: "#facc15", Mistlands: "#a78bfa", Ashlands: "#ef5a2a", "Deep North": "#67e8f9" };
+const biomeCardStyle = (b) => ({ borderLeft: `5px solid ${BIOME_HEX[b]}`, boxShadow: `inset 0 34px 26px -26px ${BIOME_HEX[b]}40, 0 10px 15px -3px rgba(0,0,0,.3)` });
 const BASE = { hp: 25, st: 50, eitr: 0 };
 
 // [name, biome, hp, stamina, eitr, minutes, regen/tick, station, ingredients, yield]
@@ -231,9 +233,32 @@ const cleanPresets = (arr) => Array.isArray(arr) ? arr.map((p) => ({
   name: String((p && p.name) || "").trim().slice(0, 40),
   foods: (p && Array.isArray(p.foods) ? p.foods : []).filter((id, i, a) => FOODS.some((f) => f.id === id) && a.indexOf(id) === i).slice(0, 3),
 })).filter((p) => p.name && p.foods.length) : [];
+const normName = (t) => t.toLowerCase().replace(/[‘’`´]/g, "'").replace(/\s+/g, " ").trim();
+const FOOD_BY_NORM = new Map(FOODS.map((f) => [normName(f.name), f.id]));
+const SHARE_HEAD = "Valheim meal presets";
+// One preset per line: "Name: food + food + food". Readable in a chat app and easy to paste back.
+const presetsToText = (list) => [SHARE_HEAD, ...list.map((p) => `${p.name}: ${p.foods.join(" + ")}`)].join("\n");
+const textToPresets = (raw) => {
+  const t = raw.trim();
+  if (t.startsWith("{") || t.startsWith("[")) {
+    try { const d = JSON.parse(t); return cleanPresets(Array.isArray(d) ? d : d && d.presets); } catch (e) {}
+  }
+  return cleanPresets(t.split(/\r?\n/).map((line) => {
+    const l = line.replace(/^[\s>•]+/, "");
+    const i = l.lastIndexOf(":");
+    if (i < 1) return null;
+    return { name: l.slice(0, i), foods: l.slice(i + 1).split("+").map((x) => FOOD_BY_NORM.get(normName(x))).filter(Boolean) };
+  }).filter(Boolean));
+};
 const loadSaved = () => { try { return cleanPresets(JSON.parse(localStorage.getItem(LS_KEY) || "[]")); } catch (e) { return []; } };
 
 /* ───────── Small pieces ───────── */
+const BiomeTag = ({ biome }) => (
+  <span className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider"
+    style={{ color: BIOME_HEX[biome], backgroundColor: BIOME_HEX[biome] + "26", border: `1px solid ${BIOME_HEX[biome]}80` }}>
+    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: BIOME_HEX[biome] }} aria-hidden="true" />{biome}
+  </span>
+);
 const STAT = {
   hp: { label: "Health", Icon: Heart, text: "text-red-400", bg: "bg-red-500", chip: "bg-red-950/70 text-red-300 border-red-800/70", max: 400 },
   st: { label: "Stamina", Icon: Zap, text: "text-yellow-300", bg: "bg-yellow-400", chip: "bg-yellow-950/60 text-yellow-200 border-yellow-700/60", max: 400 },
@@ -352,11 +377,11 @@ const StationModal = ({ open, onClose }) => {
 const FoodCard = ({ f, selected, full, onToggle, onStation }) => (
   <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
     whileHover={{ y: -3 }} transition={{ duration: 0.18 }}
-    className={`wood flex flex-col gap-2 rounded-sm p-3 shadow-lg shadow-black/30 ${selected ? "ring-2 ring-amber-500" : "hover:border-amber-700"}`}>
+    style={biomeCardStyle(f.biome)} className={`wood flex flex-col gap-2 rounded-sm p-3 ${selected ? "ring-2 ring-amber-500" : ""}`}>
     <header className="flex items-start justify-between gap-2">
       <div className="min-w-0">
         <h3 className="display text-xl leading-tight text-stone-100">{f.name}</h3>
-        <p className="text-xs uppercase tracking-wider"><span className={BIOME_TINT[f.biome]}>{f.biome}</span><span className="text-stone-500"> · {f.type}</span></p>
+        <p className="mt-1 flex flex-wrap items-center gap-1.5"><BiomeTag biome={f.biome} /><span className="text-xs uppercase tracking-wider text-stone-400">{f.type}</span></p>
       </div>
       <button onClick={() => onToggle(f.id)} disabled={!selected && full}
         className={`flex shrink-0 items-center gap-1 rounded-sm border px-2 py-1 text-sm font-bold transition-colors ${selected ? "border-amber-500 bg-amber-500 text-stone-950 hover:bg-amber-400" : "border-amber-700 text-amber-300 hover:bg-amber-500 hover:text-stone-950 disabled:cursor-not-allowed disabled:border-stone-700 disabled:text-stone-600 disabled:hover:bg-transparent"}`}>
@@ -388,11 +413,11 @@ const Step = ({ Icon, title, children }) => (
 );
 const MeadCard = ({ m, onStation }) => (
   <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
-    whileHover={{ y: -3 }} transition={{ duration: 0.18 }} className="wood flex flex-col gap-3 rounded-sm p-3.5 shadow-lg shadow-black/30 hover:border-amber-700">
+    whileHover={{ y: -3 }} transition={{ duration: 0.18 }} style={biomeCardStyle(m.biome)} className="wood flex flex-col gap-3 rounded-sm p-3.5">
     <header className="flex items-start justify-between gap-2">
       <div className="min-w-0">
         <h3 className="display text-xl leading-tight text-stone-100">{m.name}</h3>
-        <p className={`text-xs uppercase tracking-wider ${BIOME_TINT[m.biome]}`}>{m.biome}</p>
+        <p className="mt-1"><BiomeTag biome={m.biome} /></p>
       </div>
       <span className={`shrink-0 rounded-sm border px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider ${CAT[m.category]}`}>{m.category}</span>
     </header>
@@ -413,12 +438,14 @@ const MeadCard = ({ m, onStation }) => (
 );
 
 const btnQuiet = "flex items-center gap-1.5 rounded-sm border border-stone-600 px-2.5 py-1.5 text-sm font-bold text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-35";
+const btnMain = "flex items-center gap-1.5 rounded-sm border border-amber-600 bg-amber-500 px-3 py-1.5 text-sm font-bold text-stone-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:border-stone-700 disabled:bg-transparent disabled:text-stone-600";
 const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
   const [name, setName] = useState("");
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
-  const exportText = JSON.stringify({ app: "valheim-mead-feast-planner", version: 1, presets: saved }, null, 2);
+  const exportText = presetsToText(saved);
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
   const save = (e) => {
     e.preventDefault();
     if (!picked.length) return;
@@ -427,45 +454,19 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
     setName(""); setMsg(`Saved "${n}" in this browser.`);
   };
   const importFrom = (raw) => {
-    try {
-      const data = JSON.parse(raw);
-      const list = cleanPresets(Array.isArray(data) ? data : data && data.presets);
-      if (!list.length) { setMsg("No presets found in that. Use the full text from a preset file."); return; }
-      const names = new Set(list.map((p) => p.name));
-      setSaved([...saved.filter((p) => !names.has(p.name)), ...list]);
-      setText(""); setMsg(`Imported ${list.length} preset${list.length > 1 ? "s" : ""}. Presets with the same name were replaced.`);
-    } catch (e) { setMsg("That is not a valid preset file. It should start with { and end with }."); }
-  };
-  const onFile = (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const r = new FileReader();
-    r.onload = () => importFrom(String(r.result));
-    r.onerror = () => setMsg("Could not read that file. Try pasting its text instead.");
-    r.readAsText(file); e.target.value = "";
-  };
-  const download = async () => {
-    const filename = "valheim-meal-presets.json";
-    // Inside Claude the page must ask the viewer to save; on a normal website a plain browser download works.
-    if (window.claude && window.claude.use) {
-      const downloads = await window.claude.use("downloads");
-      if (!downloads) { setMsg("Downloads are not available in this view. Use Copy text instead."); return; }
-      try { await downloads.save({ filename, data: exportText }); setMsg(`Saved ${filename}.`); }
-      catch (e) { setMsg(e && e.code === "declined" ? "Download cancelled." : "The download did not go through. Use Copy text instead."); }
-      return;
-    }
-    try {
-      const url = URL.createObjectURL(new Blob([exportText], { type: "application/json" }));
-      const a = document.createElement("a");
-      a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setMsg(`Download started: ${filename}. If nothing arrives, use Copy text instead.`);
-    } catch (e) { setMsg("Downloads are blocked here. Use Copy text instead."); }
+    const list = textToPresets(raw);
+    if (!list.length) { setMsg("No presets found in that text. Each line should look like: Name: food + food + food"); return; }
+    const names = new Set(list.map((p) => p.name));
+    setSaved([...saved.filter((p) => !names.has(p.name)), ...list]);
+    setText(""); setMsg(`Added ${list.length} preset${list.length > 1 ? "s" : ""}. Presets with the same name were replaced.`);
   };
   const copy = () => {
-    const fail = () => setMsg("Copying is blocked here. Select the text in the box and copy it by hand.");
-    try { navigator.clipboard.writeText(exportText).then(() => setMsg("Copied. Paste it into a message to send your presets."), fail); } catch (e) { fail(); }
+    const fail = () => { setOpen(true); setMsg("Copying is blocked here. Select the text in the box below and copy it by hand."); };
+    try { navigator.clipboard.writeText(exportText).then(() => setMsg("Copied. Paste it into any chat or note."), fail); } catch (e) { fail(); }
+  };
+  const share = async () => {
+    try { await navigator.share({ title: SHARE_HEAD, text: exportText }); }
+    catch (e) { if (!e || e.name !== "AbortError") setMsg("Sharing to apps is not available in this view. Use Copy to clipboard instead."); }
   };
   return (
     <section aria-labelledby="mine-h" className="mt-5">
@@ -477,13 +478,7 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
         <label htmlFor="preset-name" className="sr-only">Preset name</label>
         <input id="preset-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="Name the meal on your plates"
           className="min-w-[12rem] flex-1 rounded-sm border border-stone-700 bg-stone-950/60 px-3 py-1.5 text-stone-100 placeholder:text-stone-500 sm:max-w-xs" />
-        <button type="submit" disabled={!picked.length} className="flex items-center gap-1.5 rounded-sm border border-amber-600 bg-amber-500 px-3 py-1.5 text-sm font-bold text-stone-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:border-stone-700 disabled:bg-transparent disabled:text-stone-600">
-          <Save size={15} aria-hidden="true" />Save plates as preset
-        </button>
-        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className={btnQuiet}>
-          <Share size={15} aria-hidden="true" />Share or import
-          <Chevron size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
-        </button>
+        <button type="submit" disabled={!picked.length} className={btnQuiet}><Save size={15} aria-hidden="true" />Save plates as preset</button>
       </form>
       {saved.length ? (
         <ul className="mt-2 flex flex-wrap gap-2">
@@ -505,31 +500,32 @@ const MyPresets = ({ saved, setSaved, picked, slots, onLoad }) => {
           </AnimatePresence>
         </ul>
       ) : <p className="mt-2 text-sm text-stone-500">No presets yet. Fill your plates, give the meal a name and save it.</p>}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={copy} disabled={!saved.length} className={btnMain}><Copy size={15} aria-hidden="true" />Copy to clipboard</button>
+        {canShare && <button type="button" onClick={share} disabled={!saved.length} className={btnMain}><Share size={15} aria-hidden="true" />Share to apps</button>}
+        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className={btnQuiet}>
+          <Plus size={15} aria-hidden="true" />Add presets from text
+          <Chevron size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
+        </button>
+      </div>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="wood mt-3 grid gap-4 rounded-sm p-3 md:grid-cols-2">
               <div className="flex min-w-0 flex-col gap-2">
-                <h3 className="font-bold text-stone-100">Send your presets</h3>
-                <p className="text-sm text-stone-400">Download them as a file, or copy the text and paste it into a message.</p>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={download} disabled={!saved.length} className={btnQuiet}><Download size={15} aria-hidden="true" />Download file</button>
-                  <button type="button" onClick={copy} disabled={!saved.length} className={btnQuiet}><Copy size={15} aria-hidden="true" />Copy text</button>
-                </div>
-                <label htmlFor="preset-export" className="sr-only">Your presets as text</label>
-                <textarea id="preset-export" readOnly value={saved.length ? exportText : ""} placeholder="Save a preset and its text appears here." rows={5} onFocus={(e) => e.target.select()}
-                  className="num w-full rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-300 placeholder:text-stone-600" />
-              </div>
-              <div className="flex min-w-0 flex-col gap-2">
-                <h3 className="font-bold text-stone-100">Add presets from someone else</h3>
-                <p className="text-sm text-stone-400">Choose a preset file, or paste its text below.</p>
-                <label htmlFor="preset-file" className={`${btnQuiet} w-fit cursor-pointer`}><Upload size={15} aria-hidden="true" />Choose file
-                  <input id="preset-file" type="file" accept=".json,application/json,text/plain" onChange={onFile} className="sr-only" />
-                </label>
+                <h3 className="font-bold text-stone-100">Add presets someone sent you</h3>
+                <p className="text-sm text-stone-400">Paste the message here. One preset per line, like <span className="font-mono text-xs text-stone-300">Tank: Bread + Honey + Sausages</span></p>
                 <label htmlFor="preset-import" className="sr-only">Paste preset text</label>
                 <textarea id="preset-import" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste preset text here" rows={5}
                   className="w-full rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-200 placeholder:text-stone-600" />
                 <button type="button" onClick={() => importFrom(text)} disabled={!text.trim()} className={`${btnQuiet} w-fit`}><Plus size={15} aria-hidden="true" />Add pasted presets</button>
+              </div>
+              <div className="flex min-w-0 flex-col gap-2">
+                <h3 className="font-bold text-stone-100">Your presets as text</h3>
+                <p className="text-sm text-stone-400">This is what the copy and share buttons send. Tap the box to select it all.</p>
+                <label htmlFor="preset-export" className="sr-only">Your presets as text</label>
+                <textarea id="preset-export" readOnly value={saved.length ? exportText : ""} placeholder="Save a preset and its text appears here." rows={5} onFocus={(e) => e.target.select()}
+                  className="w-full rounded-sm border border-stone-700 bg-stone-950/60 p-2 font-mono text-xs text-stone-300 placeholder:text-stone-600" />
               </div>
             </div>
           </motion.div>
@@ -701,7 +697,7 @@ function App() {
             </label>
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Biome filter">
-            {["All", ...BIOMES].map((b) => <Pill key={b} active={biome === b} onClick={() => setBiome(b)}>{b === "All" ? "All biomes" : b}</Pill>)}
+            {["All", ...BIOMES].map((b) => <Pill key={b} active={biome === b} onClick={() => setBiome(b)}><span className="inline-flex items-center gap-1.5">{b !== "All" && <span className="h-2 w-2 rounded-full ring-1 ring-black/40" style={{ backgroundColor: BIOME_HEX[b] }} aria-hidden="true" />}{b === "All" ? "All biomes" : b}</span></Pill>)}
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5" aria-label={tab === "foods" ? "Stat focus filter" : "Category filter"}>
             {tab === "foods"
