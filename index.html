@@ -52,7 +52,7 @@ const Heart = icon("Heart"), Zap = icon("Zap"), Sparkles = icon("Sparkles"), Sea
   Utensils = icon("Utensils"), Basket = icon("ShoppingBasket"), Chevron = icon("ChevronDown"),
   Shield = icon("Shield"), Compass = icon("Compass"), Wand = icon("Wand2"), Scale = icon("Scale"),
   Arrow = icon("ArrowRight"), Beer = icon("Beer"), Trash = icon("Trash2"), Hourglass = icon("Hourglass"),
-  Activity = icon("Activity"), Timer = icon("Timer"), Save = icon("Save"), Copy = icon("Copy"), Share = icon("Share2"), Flame = icon("Flame"), Info = icon("Info"), Hammer = icon("Hammer");
+  Activity = icon("Activity"), Timer = icon("Timer"), Trophy = icon("Trophy"), Save = icon("Save"), Copy = icon("Copy"), Share = icon("Share2"), Flame = icon("Flame"), Info = icon("Info"), Hammer = icon("Hammer");
 
 /* ───────── Data ───────── */
 const BIOMES = ["Meadows", "Black Forest", "Swamps", "Mountain", "Plains", "Mistlands", "Ashlands", "Deep North"];
@@ -252,6 +252,41 @@ const textToPresets = (raw) => {
 };
 const loadSaved = () => { try { return cleanPresets(JSON.parse(localStorage.getItem(LS_KEY) || "[]")); } catch (e) { return []; } };
 
+/* ───────── Focus forks and trophies ───────── */
+const FOCUS_HEX = { Health: "#f87171", Stamina: "#fde047", Balanced: "#f5f5f4", Eitr: "#c084fc" };
+const Fork = ({ type, size = 14 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={FOCUS_HEX[type]} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="inline-block shrink-0" role="img" aria-label={`${type} food`}>
+    <title>{type} food</title>
+    <path d="M7 2v6a5 5 0 0 0 10 0V2M12 2v20" />
+  </svg>
+);
+const FocusTag = ({ type }) => (
+  <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider" style={{ color: FOCUS_HEX[type] }}><Fork type={type} size={13} />{type}</span>
+);
+const RANK_KEY = { Health: "hp", Stamina: "st", Eitr: "eitr", Balanced: "hp" };
+const RANK = [null, { hex: "#fbbf24", label: "1st", word: "Highest" }, { hex: "#cbd5e1", label: "2nd", word: "2nd highest" }, { hex: "#cd7f47", label: "3rd", word: "3rd highest" }];
+// Top three values per focus within a list; foods that tie share a trophy.
+const rankFoods = (list) => {
+  const out = {};
+  Object.keys(RANK_KEY).forEach((type) => {
+    const k = RANK_KEY[type];
+    const mine = list.filter((f) => f.type === type);
+    const top = [...new Set(mine.map((f) => f[k]))].sort((a, b) => b - a).slice(0, 3);
+    mine.forEach((f) => { const i = top.indexOf(f[k]); if (i >= 0) out[f.id] = i + 1; });
+  });
+  return out;
+};
+const TrophyTag = ({ rank, type, scope }) => {
+  const r = RANK[rank];
+  const what = type === "Balanced" ? "balanced stats" : type.toLowerCase();
+  const tip = `${r.word} ${what} ${scope}`;
+  return (
+    <span className="num inline-flex items-center gap-0.5 text-xs font-bold" style={{ color: r.hex }} title={tip}>
+      <Trophy size={13} aria-hidden="true" />{r.label}<span className="sr-only"> {tip}</span>
+    </span>
+  );
+};
+
 /* ───────── Small pieces ───────── */
 const BiomeTag = ({ biome }) => (
   <span className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider"
@@ -374,14 +409,14 @@ const StationModal = ({ open, onClose }) => {
 };
 
 /* ───────── Cards ───────── */
-const FoodCard = ({ f, selected, full, onToggle, onStation }) => (
+const FoodCard = ({ f, selected, full, onToggle, onStation, rank, scope }) => (
   <motion.article layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
     whileHover={{ y: -3 }} transition={{ duration: 0.18 }}
     style={biomeCardStyle(f.biome)} className={`wood flex flex-col gap-2 rounded-sm p-3 ${selected ? "ring-2 ring-amber-500" : ""}`}>
     <header className="flex items-start justify-between gap-2">
       <div className="min-w-0">
         <h3 className="display text-xl leading-tight text-stone-100">{f.name}</h3>
-        <p className="mt-1 flex flex-wrap items-center gap-1.5"><BiomeTag biome={f.biome} /><span className="text-xs uppercase tracking-wider text-stone-400">{f.type}</span></p>
+        <p className="mt-1 flex flex-wrap items-center gap-1.5"><BiomeTag biome={f.biome} /><FocusTag type={f.type} />{rank && <TrophyTag rank={rank} type={f.type} scope={scope} />}</p>
       </div>
       <button onClick={() => onToggle(f.id)} disabled={!selected && full}
         className={`flex shrink-0 items-center gap-1 rounded-sm border px-2 py-1 text-sm font-bold transition-colors ${selected ? "border-amber-500 bg-amber-500 text-stone-950 hover:bg-amber-400" : "border-amber-700 text-amber-300 hover:bg-amber-500 hover:text-stone-950 disabled:cursor-not-allowed disabled:border-stone-700 disabled:text-stone-600 disabled:hover:bg-transparent"}`}>
@@ -586,6 +621,8 @@ function App() {
     return sort === "duration" ? [...list].sort((a, b) => b.duration - a.duration) : list;
   }, [biome, cat, q, sort]);
   const shown = tab === "foods" ? foods : meads;
+  const ranks = useMemo(() => rankFoods(biome === "All" ? FOODS : FOODS.filter((f) => f.biome === biome)), [biome]);
+  const scope = biome === "All" ? "of all foods" : `in ${biome}`;
   const reset = () => { setBiome("All"); setFocus("All"); setCat("All"); setQ(""); };
 
   return (
@@ -630,7 +667,7 @@ function App() {
                     {f ? (
                       <motion.div key={f.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.15 }} className="flex min-w-0 flex-1 flex-col gap-1.5">
                         <div className="flex items-start justify-between gap-1.5">
-                          <p className="min-w-0 break-words text-sm font-bold leading-tight text-stone-100 sm:text-base">{f.name}</p>
+                          <p className="min-w-0 break-words text-sm font-bold leading-tight text-stone-100 sm:text-base"><Fork type={f.type} size={14} /> {f.name}</p>
                           <button onClick={() => toggle(f.id)} aria-label={`Remove ${f.name} from plate ${i + 1}`}
                             className="flex shrink-0 items-center gap-1 rounded-sm border border-red-800 bg-red-950/60 px-1.5 py-0.5 text-xs font-bold text-red-200 transition-colors hover:bg-red-600 hover:text-white">
                             <X size={13} aria-hidden="true" /><span className="hidden sm:inline">Remove</span>
@@ -715,6 +752,13 @@ function App() {
               : ["All", "Healing", "Stamina", "Resistance", "Utility"].map((t) => <Pill key={t} active={cat === t} onClick={() => setCat(t)}>{t === "All" ? "Any category" : t}</Pill>)}
           </div>
 
+          {tab === "foods" && (
+            <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-400">
+              <span>Fork colour shows the focus:</span>
+              {["Health", "Stamina", "Balanced", "Eitr"].map((t) => <FocusTag key={t} type={t} />)}
+              <span className="inline-flex items-center gap-1"><Trophy size={13} style={{ color: RANK[1].hex }} aria-hidden="true" />Trophies mark the top three for each focus {scope}.</span>
+            </p>
+          )}
           <p className="num mt-4 text-sm text-stone-500">{shown.length} {tab === "foods" ? "foods" : "meads"} shown</p>
           {shown.length === 0 ? (
             <div className="wood mt-3 rounded-sm p-6 text-center">
@@ -725,7 +769,7 @@ function App() {
             <div className={`mt-3 grid gap-3 ${tab === "foods" ? "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" : "lg:grid-cols-2"}`}>
               <AnimatePresence mode="popLayout" initial={false}>
                 {tab === "foods"
-                  ? foods.map((f) => <FoodCard key={f.id} f={f} selected={slots.includes(f.id)} full={slots.length >= 3} onToggle={toggle} onStation={setStation} />)
+                  ? foods.map((f) => <FoodCard key={f.id} f={f} selected={slots.includes(f.id)} full={slots.length >= 3} onToggle={toggle} onStation={setStation} rank={ranks[f.id]} scope={scope} />)
                   : meads.map((m) => <MeadCard key={m.id} m={m} onStation={setStation} />)}
               </AnimatePresence>
             </div>
