@@ -499,6 +499,8 @@ const ingToText = (ing) => ing.map(([n, q]) => `${n} ${q}`).join(", ");
 const describeCustom = (x) => (x.effect != null ? `${x.effect}. Lasts ${fmtDur(x.duration)}, cooldown ${fmtDur(x.cooldown)}.` : `${x.hp} health, ${x.st} stamina, ${x.eitr} eitr. Lasts ${fmtDur(x.duration)}, ${x.regen} hp per tick.`);
 
 /* ───────── What's new ───────── */
+// Version shown on the page. Raise it by 0.001 for every change, and give the matching UPDATES entry the same number.
+const APP_VERSION = "0.500";
 // Add a new entry at the end for each release. Visitors see every entry newer than the last one they dismissed.
 const UPDATES = [
   { v: 1, date: "10 Oct 2026", items: [
@@ -541,6 +543,9 @@ const UPDATES = [
   { v: 9, date: "10 Oct 2026", items: [
     ["Install it as an app", "On the website, use Install as an app at the top, or your browser's Install or Add to Home Screen option. It then opens in its own window and works offline after the first visit."],
     ["Simpler plates", "Plates now show only the name, stats and trophy. One Show recipes button opens the biome, station and ingredients for every plate at once."],
+  ] },
+  { v: 10, ver: "0.500", date: "14 Oct 2026", items: [
+    ["Version numbers", "The planner now shows its version number, starting at 0.500, under the title and at the bottom of the page. Each update raises it, so you can tell at a glance whether you have the latest."],
   ] },
 ];
 const LATEST = UPDATES[UPDATES.length - 1].v;
@@ -835,7 +840,7 @@ const UpdateList = ({ list }) => (
   <div className="flex flex-col gap-4">
     {list.map((u) => (
       <section key={u.v}>
-        <h3 className="mb-1.5 border-b border-stone-700 pb-1 text-xs font-bold uppercase tracking-wider text-stone-400">Update {u.v} · {u.date}</h3>
+        <h3 className="mb-1.5 border-b border-stone-700 pb-1 text-xs font-bold uppercase tracking-wider text-stone-400">{u.ver ? `Version ${u.ver}` : `Update ${u.v}`} · {u.date}</h3>
         <ul className="flex flex-col gap-2">
           {u.items.map(([t, d]) => <li key={t}><p className="font-bold text-amber-200">{t}</p><p className="text-sm text-stone-300">{d}</p></li>)}
         </ul>
@@ -863,7 +868,7 @@ const UpdatesPage = ({ onBack }) => (
     </button>
     <p className="rune mt-6" aria-hidden="true">ᚾᛖᚹᛊ</p>
     <h1 className="display text-4xl font-bold text-amber-400 sm:text-5xl">Update Notes</h1>
-    <p className="mt-1 max-w-prose text-lg text-stone-400">Every change made to the Valheim Mead &amp; Feast Planner, newest first.</p>
+    <p className="mt-1 max-w-prose text-lg text-stone-400">Every change made to the Valheim Mead &amp; Feast Planner, newest first. You are on version <span className="num font-bold text-amber-300">{APP_VERSION}</span>.</p>
     <div className="wood mt-6 rounded-sm p-4"><UpdateList list={[...UPDATES].reverse()} /></div>
     <button type="button" onClick={onBack} className="mt-6 flex items-center gap-1.5 text-sm font-bold text-stone-400 underline decoration-dotted underline-offset-2 hover:text-amber-300">
       <Arrow size={14} className="rotate-180" aria-hidden="true" />Back to the planner
@@ -1532,6 +1537,7 @@ function App() {
         <header className="pb-5 pt-8">
           <p className="rune" aria-hidden="true">ᚠᛟᛟᛞ ᚨᚾᛞ ᛗᛖᚨᛞ</p>
           <h1 className="display text-4xl font-bold text-amber-400 sm:text-5xl">Valheim Mead &amp; Feast Planner</h1>
+          <p className="num mt-0.5 text-xs font-bold uppercase tracking-widest text-stone-500">Version {APP_VERSION}</p>
           <p className="mt-1 max-w-prose text-lg text-stone-400">Fill three plates, read your health, stamina and eitr before you leave the hall, and see what to gather.</p>
           {installEvt && (
             <button type="button" onClick={install} className="mt-3 flex items-center gap-1.5 rounded-sm border border-amber-600 bg-amber-500 px-3 py-1.5 text-sm font-bold text-stone-950 transition-colors hover:bg-amber-400">
@@ -1730,6 +1736,7 @@ function App() {
         <footer className="mt-10 border-t border-stone-800 pt-4 text-sm text-stone-500">
           <p className="max-w-prose">Stats follow the community wiki. Ashlands recipe quantities and regen ticks, and the Deep North entries from the 1.0 launch guides, are the least certain, so check them in game before a long farming trip. Station build costs come from memory and guides, so treat them as a guide too. Feasts and the Bog Witch utility brews are not listed.</p>
           <button type="button" onClick={() => goPage("updates")} className="mt-2 flex items-center gap-1.5 text-sm font-bold text-stone-400 underline decoration-dotted underline-offset-2 hover:text-amber-300"><Megaphone size={14} aria-hidden="true" />Update notes</button>
+          <p className="num mt-1 text-xs text-stone-500">Version {APP_VERSION}</p>
         </footer>
       </div>
     </MotionConfig>

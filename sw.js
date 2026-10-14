@@ -1,7 +1,7 @@
 // Offline support for the installed app.
 // Our own files: try the network first so updates arrive, fall back to the saved copy when offline.
 // Library and font files from CDNs carry a version in their address, so a saved copy is always right: use it first.
-const CACHE = "valheim-planner-v1";
+const CACHE = "valheim-planner-0.500"; // match APP_VERSION so installed apps pick up each release
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (event) => {
