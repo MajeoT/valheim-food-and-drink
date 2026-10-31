@@ -500,7 +500,7 @@ const describeCustom = (x) => (x.effect != null ? `${x.effect}. Lasts ${fmtDur(x
 
 /* ───────── What's new ───────── */
 // Version shown on the page. Raise it by 0.001 for every change, and give the matching UPDATES entry the same number.
-const APP_VERSION = "0.501";
+const APP_VERSION = "0.502";
 // Add a new entry at the end for each release. Visitors see every entry newer than the last one they dismissed.
 const UPDATES = [
   { v: 1, date: "10 Oct 2026", items: [
@@ -550,6 +550,9 @@ const UPDATES = [
   { v: 11, ver: "0.501", date: "31 Oct 2026", items: [
     ["Bigger buttons", "Edit figures, the plate remove buttons, Shopping list, Clear and Show recipes are taller and easier to tap."],
     ["Tidier plates panel", "On phones the health regen and the Shopping list and Clear buttons now sit on one row instead of wrapping."],
+  ] },
+  { v: 12, ver: "0.502", date: "31 Oct 2026", items: [
+    ["Notes for the project", "The project's README now describes where the site is hosted and how to edit it. Nothing changes in the planner itself."],
   ] },
 ];
 const LATEST = UPDATES[UPDATES.length - 1].v;
