@@ -500,7 +500,7 @@ const describeCustom = (x) => (x.effect != null ? `${x.effect}. Lasts ${fmtDur(x
 
 /* ───────── What's new ───────── */
 // Version shown on the page. Raise it by 0.001 for every change, and give the matching UPDATES entry the same number.
-const APP_VERSION = "0.500";
+const APP_VERSION = "0.501";
 // Add a new entry at the end for each release. Visitors see every entry newer than the last one they dismissed.
 const UPDATES = [
   { v: 1, date: "10 Oct 2026", items: [
@@ -546,6 +546,10 @@ const UPDATES = [
   ] },
   { v: 10, ver: "0.500", date: "14 Oct 2026", items: [
     ["Version numbers", "The planner now shows its version number, starting at 0.500, under the title and at the bottom of the page. Each update raises it, so you can tell at a glance whether you have the latest."],
+  ] },
+  { v: 11, ver: "0.501", date: "31 Oct 2026", items: [
+    ["Bigger buttons", "Edit figures, the plate remove buttons, Shopping list, Clear and Show recipes are taller and easier to tap."],
+    ["Tidier plates panel", "On phones the health regen and the Shopping list and Clear buttons now sit on one row instead of wrapping."],
   ] },
 ];
 const LATEST = UPDATES[UPDATES.length - 1].v;
@@ -919,7 +923,7 @@ const EditFooter = ({ item, editing, onEdit }) => (
   <div className="flex items-center justify-between gap-2">
     {item.edited ? <span className="flex items-center gap-1 rounded-sm bg-amber-500 px-1.5 py-0.5 text-xs font-bold text-stone-950"><Pencil size={11} aria-hidden="true" />Edited by you</span> : <span />}
     {!editing && <button type="button" onClick={onEdit} title="Change these numbers if they are wrong. Saved on this device only."
-      className="flex items-center gap-1.5 rounded-sm border border-stone-500 bg-stone-950/50 px-2 py-1 text-xs font-bold text-stone-100 transition-colors hover:border-amber-500 hover:bg-amber-500 hover:text-stone-950"><Pencil size={13} aria-hidden="true" />Edit figures</button>}
+      className="flex min-h-10 items-center gap-1.5 rounded-sm border border-stone-500 bg-stone-950/50 px-3 py-1 text-xs font-bold text-stone-100 transition-colors hover:border-amber-500 hover:bg-amber-500 hover:text-stone-950"><Pencil size={13} aria-hidden="true" />Edit figures</button>}
   </div>
 );
 
@@ -1533,7 +1537,7 @@ function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="mx-auto max-w-7xl px-4 pb-16">
+      <main className="mx-auto block max-w-7xl px-4 pb-16">
         <header className="pb-5 pt-8">
           <p className="rune" aria-hidden="true">ᚠᛟᛟᛞ ᚨᚾᛞ ᛗᛖᚨᛞ</p>
           <h1 className="display text-4xl font-bold text-amber-400 sm:text-5xl">Valheim Mead &amp; Feast Planner</h1>
@@ -1585,7 +1589,7 @@ function App() {
                         <div className="flex items-start justify-between gap-1.5">
                           <p className="min-w-0 break-words text-sm font-bold leading-tight text-stone-100 sm:text-base"><Fork type={f.type} size={14} /> {f.name}{f.custom && <> <CustomTag small /></>}</p>
                           <button onClick={() => toggle(f.id)} aria-label={`Remove ${f.name} from plate ${i + 1}`}
-                            className="flex shrink-0 items-center gap-1 rounded-sm border border-red-800 bg-red-950/60 px-1.5 py-0.5 text-xs font-bold text-red-200 transition-colors hover:bg-red-600 hover:text-white">
+                            className="flex min-h-8 min-w-8 shrink-0 items-center justify-center gap-1 rounded-sm border border-red-800 bg-red-950/60 px-1.5 py-0.5 text-xs font-bold text-red-200 transition-colors hover:bg-red-600 hover:text-white">
                             <X size={13} aria-hidden="true" /><span className="hidden sm:inline">Remove</span>
                           </button>
                         </div>
@@ -1612,20 +1616,20 @@ function App() {
           </div>
           {picked.length > 0 && (
             <button type="button" onClick={() => setPlateOpen((v) => !v)} aria-expanded={plateOpen}
-              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-sm border border-stone-500 bg-stone-950/50 px-2 py-1 text-sm font-bold text-stone-100 transition-colors hover:border-amber-500 hover:text-amber-300">
+              className="mt-2 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-sm border border-stone-500 bg-stone-950/50 px-2 py-1 text-sm font-bold text-stone-100 transition-colors hover:border-amber-500 hover:text-amber-300">
               <Chevron size={16} className={`transition-transform ${plateOpen ? "rotate-180" : ""}`} aria-hidden="true" />{plateOpen ? "Hide recipes" : "Show recipes for your plates"}
             </button>
           )}
           <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
             {["hp", "st", "eitr"].map((s) => <StatBar key={s} stat={s} total={totals[s]} parts={picked.map((f) => f[s])} />)}
-            <div className="col-span-3 flex items-center justify-between gap-3 sm:col-span-1 sm:justify-end">
-              <p className="num text-sm text-stone-300"><span className="display text-xl text-red-300">+{totals.regen}</span> hp per 10s tick</p>
-              <div className="flex flex-wrap justify-end gap-1.5">
-                <button onClick={() => setShowList((v) => !v)} aria-expanded={showList} className="flex items-center gap-1.5 rounded-sm border border-amber-700 px-2.5 py-1.5 text-sm font-bold text-amber-300 hover:bg-amber-500 hover:text-stone-950">
+            <div className="col-span-3 flex items-center justify-between gap-2 sm:col-span-1 sm:justify-end sm:gap-3">
+              <p className="num whitespace-nowrap text-sm text-stone-300" title="Health regenerated every 10 seconds"><span className="display text-xl text-red-300">+{totals.regen}</span> hp / 10s</p>
+              <div className="flex justify-end gap-1.5">
+                <button onClick={() => setShowList((v) => !v)} aria-expanded={showList} className="flex min-h-10 items-center gap-1.5 rounded-sm border border-amber-700 px-2.5 py-1.5 text-sm font-bold text-amber-300 hover:bg-amber-500 hover:text-stone-950">
                   <Basket size={15} aria-hidden="true" />Shopping list
                   <Chevron size={14} className={`transition-transform ${showList ? "rotate-180" : ""}`} aria-hidden="true" />
                 </button>
-                <button onClick={() => setSlots([])} disabled={!picked.length} className="flex items-center gap-1.5 rounded-sm border border-stone-600 px-2.5 py-1.5 text-sm font-bold text-stone-300 hover:border-red-600 hover:text-red-300 disabled:opacity-30"><Trash size={15} aria-hidden="true" />Clear plates</button>
+                <button onClick={() => setSlots([])} disabled={!picked.length} className="flex min-h-10 items-center gap-1.5 rounded-sm border border-stone-600 px-2.5 py-1.5 text-sm font-bold text-stone-300 hover:border-red-600 hover:text-red-300 disabled:opacity-30"><Trash size={15} aria-hidden="true" />Clear<span className="hidden sm:inline">&nbsp;plates</span></button>
               </div>
             </div>
           </div>
@@ -1738,7 +1742,7 @@ function App() {
           <button type="button" onClick={() => goPage("updates")} className="mt-2 flex items-center gap-1.5 text-sm font-bold text-stone-400 underline decoration-dotted underline-offset-2 hover:text-amber-300"><Megaphone size={14} aria-hidden="true" />Update notes</button>
           <p className="num mt-1 text-xs text-stone-500">Version {APP_VERSION}</p>
         </footer>
-      </div>
+      </main>
     </MotionConfig>
   );
 }
